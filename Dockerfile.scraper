@@ -1,0 +1,14 @@
+# Scraper job — full image with Playwright + Chromium for Cloud Run Job
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir google-cloud-storage \
+    && playwright install chromium
+
+COPY setapp_monitor/ ./setapp_monitor/
+COPY docs/ ./docs/
+
+CMD ["python", "-m", "setapp_monitor.main"]

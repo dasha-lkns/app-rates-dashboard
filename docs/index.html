@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setapp Rating Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --accent: #FF00AA;
+    --accent-light: #ff3dc0;
+    --accent-pale: rgba(255,0,170,0.06);
+    --accent-10: rgba(255,0,170,0.10);
+    --accent-15: rgba(255,0,170,0.15);
+    --accent-20: rgba(255,0,170,0.20);
+    --bg: #FFFFFF;
+    --surface: #FAFAFA;
+    --surface2: #F3F3F5;
+    --border: #E8E8EC;
+    --border-strong: #D0D0D8;
+    --text: #000000;
+    --text-secondary: #444450;
+    --text-muted: #8A8A9A;
+    --danger: #E8174A;
+    --danger-bg: rgba(232,23,74,0.08);
+    --warning: #D97B00;
+    --warning-bg: rgba(217,123,0,0.08);
+    --success: #1A8A4A;
+    --success-bg: rgba(26,138,74,0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .topbar {
+    background: var(--text); color: #fff;
+    padding: 14px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .topbar-brand {
+    font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .topbar-brand .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+  }
+  .topbar-meta { font-size: 12px; color: #999; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; }
+
+  /* ── Loading state ─────────────────── */
+  .loading {
+    text-align: center; padding: 80px 0;
+    font-size: 16px; color: var(--text-muted);
+  }
+  .loading .spinner {
+    display: inline-block; width: 28px; height: 28px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+    margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Tabs ───────────────────────────── */
+  .tab-bar {
+    display: flex; gap: 0; border-bottom: 2px solid var(--border);
+    margin-bottom: 28px; overflow-x: auto;
+  }
+  .tab-btn {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; padding: 10px 20px;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; white-space: nowrap; transition: all .15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── KPI Row ───────────────────────── */
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 16px; margin-bottom: 28px;
+  }
+  @media (max-width: 768px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 20px; transition: border-color .15s;
+  }
+  .kpi:hover { border-color: var(--accent); }
+  .kpi .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--text-muted); margin-bottom: 10px; font-weight: 500;
+  }
+  .kpi .value { font-size: 34px; font-weight: 700; letter-spacing: -1px; }
+  .kpi .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── Section ───────────────────────── */
+  .section { margin-bottom: 36px; }
+  .section-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  }
+  .section-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .pill {
+    font-size: 10px; font-weight: 700; letter-spacing: .8px;
+    padding: 4px 10px; border-radius: 20px; text-transform: uppercase;
+  }
+  .pill-accent { background: var(--accent-15); color: var(--accent); }
+  .pill-danger { background: var(--danger-bg); color: var(--danger); }
+  .pill-warning { background: var(--warning-bg); color: var(--warning); }
+  .pill-ok { background: var(--success-bg); color: var(--success); }
+
+  /* ── Charts ────────────────────────── */
+  .charts-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 36px;
+  }
+  @media (max-width: 800px) { .charts-row { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px;
+  }
+  .card h3 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .8px; color: var(--text-muted); margin-bottom: 16px;
+  }
+  .chart-box { position: relative; width: 100%; height: 280px; }
+
+  /* ── Drill-down panel ──────────────── */
+  .dist-panel {
+    margin-top: 14px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    max-height: 0; opacity: 0;
+    transition: max-height .35s ease, opacity .25s ease, padding .25s ease;
+    padding: 0 18px;
+  }
+  .dist-panel.open { max-height: 600px; opacity: 1; padding: 18px; overflow-y: auto; }
+  .dist-panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .dist-panel-header h4 { font-size: 14px; font-weight: 700; }
+  .dist-panel-header .close-btn {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 12px; cursor: pointer; font-size: 12px; color: var(--text-muted);
+    transition: all .15s;
+  }
+  .dist-panel-header .close-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .dist-app-list { list-style: none; }
+  .dist-app-list li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .dist-app-list li:last-child { border-bottom: none; }
+  .dist-app-list .app-link {
+    text-decoration: none; color: var(--text); font-weight: 500;
+    font-size: 13px; transition: color .15s; min-width: 140px;
+  }
+  .dist-app-list .app-link:hover { color: var(--accent); }
+  .dist-app-rating { font-size: 13px; font-weight: 700; min-width: 42px; text-align: right; }
+  .dist-app-bar {
+    flex: 1; height: 6px; background: var(--surface2); border-radius: 3px;
+    overflow: hidden; min-width: 60px; max-width: 160px;
+  }
+  .dist-app-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+  .dist-app-count { font-size: 11px; color: var(--text-muted); min-width: 70px; text-align: right; }
+
+  /* ── Table ─────────────────────────── */
+  .table-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--text-muted); padding: 14px 18px;
+    background: var(--surface2); font-weight: 600;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+    cursor: pointer; user-select: none;
+  }
+  th:hover { color: var(--text); }
+  th .sort-arrow { font-size: 9px; margin-left: 4px; opacity: .4; }
+  th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+  td {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    font-size: 13px; vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr { transition: background .1s; }
+  tr:hover { background: var(--accent-pale); }
+  .rank-cell { color: var(--text-muted); font-weight: 700; font-size: 12px; width: 36px; }
+  .app-cell a {
+    color: var(--text); text-decoration: none; font-weight: 600; transition: color .15s;
+  }
+  .app-cell a:hover { color: var(--accent); }
+  .rating-cell { min-width: 180px; }
+  .rating-bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .rating-bar {
+    flex: 1; height: 7px; background: var(--surface2);
+    border-radius: 4px; overflow: hidden; min-width: 70px;
+  }
+  .rating-bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width .6s cubic-bezier(.22,.68,0,.98);
+  }
+  .rating-num { font-weight: 800; font-size: 14px; min-width: 42px; }
+  .count-cell { color: var(--text-muted); font-size: 12px; }
+
+  /* ── Change indicators ─────────────── */
+  .change-cell { font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .change-up { color: var(--success); }
+  .change-down { color: var(--danger); }
+  .change-stable { color: var(--text-muted); }
+  .arrow-up::before { content: "▲ "; font-size: 10px; }
+  .arrow-down::before { content: "▼ "; font-size: 10px; }
+
+  /* ── Analysis cards ────────────────── */
+  .analysis-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  @media (max-width: 768px) { .analysis-grid { grid-template-columns: 1fr; } }
+  .analysis-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; transition: border-color .15s;
+  }
+  .analysis-card:hover { border-color: var(--accent); }
+  .analysis-card .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .analysis-card h4 { font-size: 14px; font-weight: 700; }
+  .analysis-card h4 a {
+    color: var(--text); text-decoration: none; transition: color .15s;
+  }
+  .analysis-card h4 a:hover { color: var(--accent); }
+  .analysis-card .rating-badge {
+    font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
+  }
+  .analysis-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.65; }
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px;
+    margin-right: 6px; margin-bottom: 6px; letter-spacing: .3px;
+  }
+
+  /* ── Empty state ───────────────────── */
+  .empty-state {
+    text-align: center; padding: 40px 20px; color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  /* ── Click hint ────────────────────── */
+  .click-hint {
+    text-align: center; font-size: 11px; color: var(--text-muted);
+    margin-top: 4px; opacity: .7;
+  }
+
+  /* ── Footer ────────────────────────── */
+  .footer {
+    text-align: center; padding: 28px 0 0; margin-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-muted);
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <span class="dot"></span> Setapp Rating Monitor
+  </div>
+  <div class="topbar-meta">
+    Snapshot: <strong id="snapshotDate">—</strong> &nbsp;&middot;&nbsp;
+    <span id="snapshotCount">—</span>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Loading -->
+  <div class="loading" id="loadingState">
+    <div class="spinner"></div>
+    <div>Loading dashboard data…</div>
+  </div>
+
+  <div id="dashboardContent" style="display:none">
+
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total Apps</div>
+      <div class="value" id="kpiTotal">—</div>
+      <div class="sub" id="kpiTotalSub">tracked on Setapp</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Average Rating</div>
+      <div class="value" id="kpiAvg">—</div>
+      <div class="sub">across all apps</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Lowest Rating</div>
+      <div class="value" style="color:var(--danger)" id="kpiMin">—</div>
+      <div class="sub" id="kpiMinApp">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Below 70%</div>
+      <div class="value" style="color:var(--accent)" id="kpiBelow70">—</div>
+      <div class="sub">quality concerns</div>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="changes">24h Changes</button>
+    <button class="tab-btn" data-tab="atRisk">At Risk</button>
+    <button class="tab-btn" data-tab="stable">Stable</button>
+  </div>
+
+  <!-- ═══════════ TAB: Overview ═══════════ -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="charts-row">
+      <div class="card">
+        <h3>Bottom 10 — Rating Comparison</h3>
+        <div class="chart-box"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="card" id="distCard">
+        <h3>Rating Distribution — Click a segment to explore</h3>
+        <div class="chart-box"><canvas id="donutChart"></canvas></div>
+        <p class="click-hint">Click any slice to see apps in that range</p>
+        <div class="dist-panel" id="distPanel">
+          <div class="dist-panel-header">
+            <h4 id="distPanelTitle">—</h4>
+            <button class="close-btn" id="distPanelClose">Close</button>
+          </div>
+          <ul class="dist-app-list" id="distPanelList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom 10 Table -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Bottom 10 — Lowest Rated Apps</h2>
+        <span class="pill pill-danger">Watch List</span>
+      </div>
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>#</th><th>App</th><th>Rating</th><th>Ratings</th><th>Signal</th>
+          </tr></thead>
+          <tbody id="bottom10Body"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- AI Analysis -->
+    <div class="section">
+      <div class="section-head">
+        <h2>AI Quality Analysis</h2>
+        <span class="pill pill-accent">Insights</span>
+      </div>
+      <div class="analysis-grid" id="analysisCards"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: 24h Changes ═══════════ -->
+  <div class="tab-content" id="tab-changes">
+    <div class="section">
+      <div class="section-head">
+        <h2>Apps With Rating Changes (Last 24 Hours)</h2>
+        <span class="pill pill-warning" id="changesCount">—</span>
+      </div>
+      <div id="changesEmpty" class="empty-state" style="display:none">
+        No rating changes detected between snapshots. Changes appear when ratings shift between consecutive daily scrapes.
+      </div>
+      <div class="table-card" id="changesTable" style="display:none"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>App</th>
+            <th>Previous</th>
+            <th>Current</th>
+            <th>Change</th>
+            <th>Direction</th>
+          </tr></thead>
+          <tbody id="changesBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: At Risk ═══════════ -->
+  <div class="tab-content" id="tab-atRisk">
+    <div class="section">
+      <div class="section-head">
+        <h2>Apps At Risk</h2>
+        <span class="pill pill-danger" id="atRiskCount">—</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px">
+        Apps flagged for attention: rating below 70% or dropped 5+ points in the last 7 days.
+      </p>
+      <div id="atRiskEmpty" class="empty-state" style="display:none">
+        No apps currently flagged as at risk. All apps are performing within acceptable thresholds.
+      </div>
+      <div class="table-card" id="atRiskTable" style="display:none"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>App</th><th>Rating</th><th>7-Day Change</th><th>Reason</th>
+          </tr></thead>
+          <tbody id="atRiskBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: Stable ═══════════ -->
+  <div class="tab-content" id="tab-stable">
+    <div class="section">
+      <div class="section-head">
+        <h2>Stable Apps</h2>
+        <span class="pill pill-ok" id="stableCount">—</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px">
+        Apps with no significant rating changes (≤1 point) over the past 7 days.
+      </p>
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>App</th><th>Rating</th><th>Ratings</th><th>7-Day Change</th>
+          </tr></thead>
+          <tbody id="stableBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Setapp App Rating Monitor &middot; Data from <a href="https://setapp.com/apps" target="_blank">setapp.com</a> &middot;
+    Generated <span id="footerDate">—</span>
+  </div>
+
+  </div><!-- /dashboardContent -->
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   DATA LOADING — supports both embedded and fetch()
+   ═══════════════════════════════════════════════════ */
+let DATA = null;
+
+(async function init() {
+  // Try loading via fetch (GitHub Pages mode)
+  if (typeof EMBEDDED_DATA !== 'undefined') {
+    DATA = EMBEDDED_DATA;
+    render();
+    return;
+  }
+  try {
+    const resp = await fetch('dashboard_data.json');
+    if (resp.ok) { DATA = await resp.json(); render(); return; }
+  } catch(e) {}
+  // Fallback: try relative path from reports/
+  try {
+    const resp2 = await fetch('../reports/dashboard_data.json');
+    if (resp2.ok) { DATA = await resp2.json(); render(); return; }
+  } catch(e2) {}
+
+  document.getElementById('loadingState').innerHTML =
+    '<div style="color:var(--danger)">Could not load dashboard data.<br>Place <code>dashboard_data.json</code> alongside this HTML file.</div>';
+})();
+
+/* ═══════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════ */
+function render() {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashboardContent').style.display = 'block';
+
+  renderKPIs();
+  renderTabs();
+  renderOverviewTab();
+  renderChangesTab();
+  renderAtRiskTab();
+  renderStableTab();
+}
+
+/* ── Helpers ──────────────────────────── */
+function ratingColor(r) {
+  if (r < 60) return 'var(--danger)';
+  if (r < 70) return 'var(--warning)';
+  if (r < 80) return 'var(--accent)';
+  return 'var(--success)';
+}
+function ratingBg(r) {
+  if (r < 60) return 'var(--danger-bg)';
+  if (r < 70) return 'var(--warning-bg)';
+  return 'var(--accent-pale)';
+}
+function fmtCount(n) { return n != null ? n.toLocaleString() : '—'; }
+function changeHTML(val, dir) {
+  if (val == null) return '<span class="change-stable">—</span>';
+  const cls = dir === 'up' ? 'change-up arrow-up' : dir === 'down' ? 'change-down arrow-down' : 'change-stable';
+  const sign = val > 0 ? '+' : '';
+  return `<span class="change-cell ${cls}">${sign}${val}</span>`;
+}
+
+/* ── KPIs ─────────────────────────────── */
+function renderKPIs() {
+  document.getElementById('snapshotDate').textContent = DATA.snapshot_date;
+  document.getElementById('snapshotCount').textContent = DATA.snapshot_count + ' snapshot(s)';
+  document.getElementById('kpiTotal').textContent = DATA.total_apps;
+  if (DATA.total_discovered && DATA.total_discovered > DATA.total_apps) {
+    document.getElementById('kpiTotalSub').textContent = DATA.total_apps + ' of ' + DATA.total_discovered + ' rated';
+  }
+  document.getElementById('kpiAvg').textContent = DATA.avg_rating + '%';
+  document.getElementById('kpiMin').textContent = DATA.min_rating + '%';
+  document.getElementById('kpiMinApp').textContent = DATA.bottom10.length ? DATA.bottom10[0].app_name : '—';
+  document.getElementById('footerDate').textContent = DATA.generated_at;
+
+  let below70 = 0;
+  (DATA.distribution || []).forEach(d => {
+    if (['60-69','Below 60'].includes(d.bucket)) below70 += d.count;
+  });
+  document.getElementById('kpiBelow70').textContent = below70;
+}
+
+/* ── Tabs ─────────────────────────────── */
+function renderTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+/* ═══════════ Overview Tab ═══════════ */
+function renderOverviewTab() {
+  // Bottom 10 table
+  const tbody = document.getElementById('bottom10Body');
+  DATA.bottom10.forEach((app, i) => {
+    const color = ratingColor(app.rating_score);
+    let signal = '';
+    if (app.rating_score < 60) signal = '<span class="pill pill-danger">Critical</span>';
+    else if (app.rating_score < 70) signal = '<span class="pill pill-warning">Low</span>';
+    else signal = '<span class="pill pill-ok">Watch</span>';
+    tbody.innerHTML += `<tr>
+      <td class="rank-cell">${i+1}</td>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-cell"><div class="rating-bar-wrap">
+        <div class="rating-bar"><div class="rating-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="rating-num" style="color:${color}">${app.rating_score}%</span>
+      </div></td>
+      <td class="count-cell">${fmtCount(app.rating_count)}</td>
+      <td>${signal}</td>
+    </tr>`;
+  });
+
+  // Bar chart
+  new Chart(document.getElementById('barChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: DATA.bottom10.map(a => a.app_name),
+      datasets: [{
+        data: DATA.bottom10.map(a => a.rating_score),
+        backgroundColor: DATA.bottom10.map(a => {
+          if (a.rating_score < 60) return 'rgba(232,23,74,0.65)';
+          if (a.rating_score < 70) return 'rgba(217,123,0,0.55)';
+          return 'rgba(255,0,170,0.4)';
+        }),
+        borderRadius: 6, barPercentage: 0.7,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => c.raw + '%' } }
+      },
+      scales: {
+        x: { min: 0, max: 100, grid: { color: '#f0f0f0' }, ticks: { color: '#999', callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: '#222', font: { size: 12, weight: '500' } } }
+      }
+    }
+  });
+
+  // Donut chart
+  const bucketColors = {
+    '95-100': '#1A8A4A', '90-94': '#3BAA6A', '80-89': '#FF00AA',
+    '70-79': '#D97B00', '60-69': '#E8594A', 'Below 60': '#E8174A',
+  };
+  const donutChart = new Chart(document.getElementById('donutChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: DATA.distribution.map(d => d.bucket + '% (' + d.count + ' apps)'),
+      datasets: [{
+        data: DATA.distribution.map(d => d.count),
+        backgroundColor: DATA.distribution.map(d => bucketColors[d.bucket] || '#ccc'),
+        borderWidth: 2, borderColor: '#fff', hoverOffset: 10,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: '#333', padding: 12, font: { size: 12 }, usePointStyle: true, pointStyleWidth: 10 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${DATA.distribution[ctx.dataIndex].bucket}%: ${ctx.raw} apps — click to view`
+          }
+        }
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        openDistPanel(DATA.distribution[elements[0].index].bucket);
+      }
+    }
+  });
+
+  // Drill-down panel
+  document.getElementById('distPanelClose').addEventListener('click', () => {
+    document.getElementById('distPanel').classList.remove('open');
+  });
+
+  // AI Analysis cards
+  const analysisDiv = document.getElementById('analysisCards');
+  DATA.bottom10.forEach(app => {
+    let tags = '', explanation = '';
+    if (app.rating_count != null && app.rating_count < 50) {
+      tags += '<span class="tag" style="background:var(--warning-bg);color:var(--warning)">Low sample</span>';
+      explanation += `With only ${app.rating_count} ratings, a few negative reviews can significantly skew the score. `;
+    }
+    if (app.rating_count != null && app.rating_count > 100) {
+      tags += '<span class="tag" style="background:var(--accent-15);color:var(--accent)">Significant data</span>';
+      explanation += `${app.rating_count.toLocaleString()} ratings make this a statistically reliable signal. `;
+    }
+    if (app.rating_score < 60) {
+      tags += '<span class="tag" style="background:var(--danger-bg);color:var(--danger)">Critical</span>';
+      explanation += 'A sub-60% rating points to major issues — likely broken features, serious bugs, or deeply misaligned expectations. ';
+    } else if (app.rating_score < 70) {
+      explanation += 'Ratings in the 60s suggest friction — often UX problems, missing features, or performance issues. ';
+    } else {
+      explanation += 'Below-average rating warrants monitoring for further decline. ';
+    }
+    const badgeColor = ratingColor(app.rating_score);
+    analysisDiv.innerHTML += `<div class="analysis-card">
+      <div class="card-top">
+        <h4><a href="${app.app_url}" target="_blank">${app.app_name}</a></h4>
+        <span class="rating-badge" style="color:${badgeColor};background:${ratingBg(app.rating_score)}">${app.rating_score}%</span>
+      </div>
+      <div style="margin-bottom:8px">${tags}</div>
+      <p>${explanation}</p>
+    </div>`;
+  });
+}
+
+function openDistPanel(bucket) {
+  const apps = (DATA.apps_by_bucket && DATA.apps_by_bucket[bucket]) || [];
+  document.getElementById('distPanelTitle').textContent = bucket + '% — ' + apps.length + ' app' + (apps.length !== 1 ? 's' : '');
+  const list = document.getElementById('distPanelList');
+  list.innerHTML = '';
+  if (!apps.length) {
+    list.innerHTML = '<li style="color:var(--text-muted);font-size:13px">No apps in this range</li>';
+  } else {
+    apps.forEach(app => {
+      const color = ratingColor(app.rating_score);
+      list.innerHTML += `<li>
+        <a class="app-link" href="${app.app_url}" target="_blank">${app.app_name}</a>
+        <div class="dist-app-bar"><div class="dist-app-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="dist-app-rating" style="color:${color}">${app.rating_score}%</span>
+        <span class="dist-app-count">${app.rating_count != null ? app.rating_count.toLocaleString() + ' ratings' : ''}</span>
+      </li>`;
+    });
+  }
+  document.getElementById('distPanel').classList.add('open');
+}
+
+/* ═══════════ 24h Changes Tab ═══════════ */
+function renderChangesTab() {
+  const changes = DATA.changes_24h || [];
+  document.getElementById('changesCount').textContent = changes.length + ' changed';
+
+  if (!changes.length) {
+    document.getElementById('changesEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('changesTable').style.display = 'block';
+  const tbody = document.getElementById('changesBody');
+  changes.forEach(app => {
+    const dirClass = app.direction === 'up' ? 'change-up arrow-up' : 'change-down arrow-down';
+    const sign = app.change > 0 ? '+' : '';
+    tbody.innerHTML += `<tr>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-num" style="color:var(--text-muted)">${app.previous_rating}%</td>
+      <td class="rating-num" style="color:${ratingColor(app.current_rating)}">${app.current_rating}%</td>
+      <td class="change-cell ${dirClass}">${sign}${app.change}</td>
+      <td>${app.direction === 'up'
+        ? '<span class="pill pill-ok">Improved</span>'
+        : '<span class="pill pill-danger">Declined</span>'}</td>
+    </tr>`;
+  });
+}
+
+/* ═══════════ All Apps Tab ═══════════ */
+/* ═══════════ At Risk Tab ═══════════ */
+function renderAtRiskTab() {
+  const apps = DATA.at_risk || [];
+  document.getElementById('atRiskCount').textContent = apps.length + ' flagged';
+
+  if (!apps.length) {
+    document.getElementById('atRiskEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('atRiskTable').style.display = 'block';
+  const tbody = document.getElementById('atRiskBody');
+  apps.forEach(app => {
+    const color = ratingColor(app.rating_score);
+    const weekChange = changeHTML(app.change_7d, app.direction_7d);
+    const reasons = (app.risk_reasons || []).map(r => `<span class="tag" style="background:var(--danger-bg);color:var(--danger)">${r}</span>`).join('');
+    tbody.innerHTML += `<tr>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-cell"><div class="rating-bar-wrap">
+        <div class="rating-bar"><div class="rating-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="rating-num" style="color:${color}">${app.rating_score}%</span>
+      </div></td>
+      <td>${weekChange}</td>
+      <td>${reasons}</td>
+    </tr>`;
+  });
+}
+
+/* ═══════════ Stable Tab ═══════════ */
+function renderStableTab() {
+  const apps = DATA.stable || [];
+  document.getElementById('stableCount').textContent = apps.length + ' apps';
+
+  const tbody = document.getElementById('stableBody');
+  apps.forEach(app => {
+    const color = ratingColor(app.rating_score);
+    const weekChange = changeHTML(app.change_7d, app.direction_7d);
+    tbody.innerHTML += `<tr>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-cell"><div class="rating-bar-wrap">
+        <div class="rating-bar"><div class="rating-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="rating-num" style="color:${color}">${app.rating_score}%</span>
+      </div></td>
+      <td class="count-cell">${fmtCount(app.rating_count)}</td>
+      <td>${weekChange}</td>
+    </tr>`;
+  });
+}
+</script>
+</body>
+</html>

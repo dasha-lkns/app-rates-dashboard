@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setapp Rating Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --accent: #FF00AA;
+    --accent-light: #ff3dc0;
+    --accent-pale: rgba(255,0,170,0.06);
+    --accent-10: rgba(255,0,170,0.10);
+    --accent-15: rgba(255,0,170,0.15);
+    --accent-20: rgba(255,0,170,0.20);
+    --bg: #FFFFFF;
+    --surface: #FAFAFA;
+    --surface2: #F3F3F5;
+    --border: #E8E8EC;
+    --border-strong: #D0D0D8;
+    --text: #000000;
+    --text-secondary: #444450;
+    --text-muted: #8A8A9A;
+    --danger: #E8174A;
+    --danger-bg: rgba(232,23,74,0.08);
+    --warning: #D97B00;
+    --warning-bg: rgba(217,123,0,0.08);
+    --success: #1A8A4A;
+    --success-bg: rgba(26,138,74,0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .topbar {
+    background: var(--text); color: #fff;
+    padding: 14px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .topbar-brand {
+    font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .topbar-brand .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+  }
+  .topbar-meta { font-size: 12px; color: #999; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; }
+
+  /* ── Loading state ─────────────────── */
+  .loading {
+    text-align: center; padding: 80px 0;
+    font-size: 16px; color: var(--text-muted);
+  }
+  .loading .spinner {
+    display: inline-block; width: 28px; height: 28px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite;
+    margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Tabs ───────────────────────────── */
+  .tab-bar {
+    display: flex; gap: 0; border-bottom: 2px solid var(--border);
+    margin-bottom: 28px; overflow-x: auto;
+  }
+  .tab-btn {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; padding: 10px 20px;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; white-space: nowrap; transition: all .15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── KPI Row ───────────────────────── */
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 16px; margin-bottom: 28px;
+  }
+  @media (max-width: 768px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 20px; transition: border-color .15s;
+  }
+  .kpi:hover { border-color: var(--accent); }
+  .kpi .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--text-muted); margin-bottom: 10px; font-weight: 500;
+  }
+  .kpi .value { font-size: 34px; font-weight: 700; letter-spacing: -1px; }
+  .kpi .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── Section ───────────────────────── */
+  .section { margin-bottom: 36px; }
+  .section-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  }
+  .section-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .pill {
+    font-size: 10px; font-weight: 700; letter-spacing: .8px;
+    padding: 4px 10px; border-radius: 20px; text-transform: uppercase;
+  }
+  .pill-accent { background: var(--accent-15); color: var(--accent); }
+  .pill-danger { background: var(--danger-bg); color: var(--danger); }
+  .pill-warning { background: var(--warning-bg); color: var(--warning); }
+  .pill-ok { background: var(--success-bg); color: var(--success); }
+
+  /* ── Charts ────────────────────────── */
+  .charts-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 36px;
+  }
+  @media (max-width: 800px) { .charts-row { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px;
+  }
+  .card h3 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .8px; color: var(--text-muted); margin-bottom: 16px;
+  }
+  .chart-box { position: relative; width: 100%; height: 280px; }
+
+  /* ── Drill-down panel ──────────────── */
+  .dist-panel {
+    margin-top: 14px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    max-height: 0; opacity: 0;
+    transition: max-height .35s ease, opacity .25s ease, padding .25s ease;
+    padding: 0 18px;
+  }
+  .dist-panel.open { max-height: 600px; opacity: 1; padding: 18px; overflow-y: auto; }
+  .dist-panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .dist-panel-header h4 { font-size: 14px; font-weight: 700; }
+  .dist-panel-header .close-btn {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 12px; cursor: pointer; font-size: 12px; color: var(--text-muted);
+    transition: all .15s;
+  }
+  .dist-panel-header .close-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .dist-app-list { list-style: none; }
+  .dist-app-list li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .dist-app-list li:last-child { border-bottom: none; }
+  .dist-app-list .app-link {
+    text-decoration: none; color: var(--text); font-weight: 500;
+    font-size: 13px; transition: color .15s; min-width: 140px;
+  }
+  .dist-app-list .app-link:hover { color: var(--accent); }
+  .dist-app-rating { font-size: 13px; font-weight: 700; min-width: 42px; text-align: right; }
+  .dist-app-bar {
+    flex: 1; height: 6px; background: var(--surface2); border-radius: 3px;
+    overflow: hidden; min-width: 60px; max-width: 160px;
+  }
+  .dist-app-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+  .dist-app-count { font-size: 11px; color: var(--text-muted); min-width: 70px; text-align: right; }
+
+  /* ── Table ─────────────────────────── */
+  .table-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--text-muted); padding: 14px 18px;
+    background: var(--surface2); font-weight: 600;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+    cursor: pointer; user-select: none;
+  }
+  th:hover { color: var(--text); }
+  th .sort-arrow { font-size: 9px; margin-left: 4px; opacity: .4; }
+  th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+  td {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    font-size: 13px; vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr { transition: background .1s; }
+  tr:hover { background: var(--accent-pale); }
+  .rank-cell { color: var(--text-muted); font-weight: 700; font-size: 12px; width: 36px; }
+  .app-cell a {
+    color: var(--text); text-decoration: none; font-weight: 600; transition: color .15s;
+  }
+  .app-cell a:hover { color: var(--accent); }
+  .rating-cell { min-width: 180px; }
+  .rating-bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .rating-bar {
+    flex: 1; height: 7px; background: var(--surface2);
+    border-radius: 4px; overflow: hidden; min-width: 70px;
+  }
+  .rating-bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width .6s cubic-bezier(.22,.68,0,.98);
+  }
+  .rating-num { font-weight: 800; font-size: 14px; min-width: 42px; }
+  .count-cell { color: var(--text-muted); font-size: 12px; }
+
+  /* ── Change indicators ─────────────── */
+  .change-cell { font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .change-up { color: var(--success); }
+  .change-down { color: var(--danger); }
+  .change-stable { color: var(--text-muted); }
+  .arrow-up::before { content: "▲ "; font-size: 10px; }
+  .arrow-down::before { content: "▼ "; font-size: 10px; }
+
+  /* ── Analysis cards ────────────────── */
+  .analysis-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  @media (max-width: 768px) { .analysis-grid { grid-template-columns: 1fr; } }
+  .analysis-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; transition: border-color .15s;
+  }
+  .analysis-card:hover { border-color: var(--accent); }
+  .analysis-card .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .analysis-card h4 { font-size: 14px; font-weight: 700; }
+  .analysis-card h4 a {
+    color: var(--text); text-decoration: none; transition: color .15s;
+  }
+  .analysis-card h4 a:hover { color: var(--accent); }
+  .analysis-card .rating-badge {
+    font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
+  }
+  .analysis-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.65; }
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px;
+    margin-right: 6px; margin-bottom: 6px; letter-spacing: .3px;
+  }
+
+  /* ── Empty state ───────────────────── */
+  .empty-state {
+    text-align: center; padding: 40px 20px; color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  /* ── Click hint ────────────────────── */
+  .click-hint {
+    text-align: center; font-size: 11px; color: var(--text-muted);
+    margin-top: 4px; opacity: .7;
+  }
+
+  /* ── Footer ────────────────────────── */
+  .footer {
+    text-align: center; padding: 28px 0 0; margin-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-muted);
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <span class="dot"></span> Setapp Rating Monitor
+  </div>
+  <div class="topbar-meta">
+    Snapshot: <strong id="snapshotDate">—</strong> &nbsp;&middot;&nbsp;
+    <span id="snapshotCount">—</span>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Loading -->
+  <div class="loading" id="loadingState">
+    <div class="spinner"></div>
+    <div>Loading dashboard data…</div>
+  </div>
+
+  <div id="dashboardContent" style="display:none">
+
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total Apps</div>
+      <div class="value" id="kpiTotal">—</div>
+      <div class="sub" id="kpiTotalSub">tracked on Setapp</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Average Rating</div>
+      <div class="value" id="kpiAvg">—</div>
+      <div class="sub">across all apps</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Lowest Rating</div>
+      <div class="value" style="color:var(--danger)" id="kpiMin">—</div>
+      <div class="sub" id="kpiMinApp">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Below 70%</div>
+      <div class="value" style="color:var(--accent)" id="kpiBelow70">—</div>
+      <div class="sub">quality concerns</div>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="changes">24h Changes</button>
+    <button class="tab-btn" data-tab="atRisk">At Risk</button>
+    <button class="tab-btn" data-tab="stable">Stable</button>
+  </div>
+
+  <!-- ═══════════ TAB: Overview ═══════════ -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="charts-row">
+      <div class="card">
+        <h3>Bottom 10 — Rating Comparison</h3>
+        <div class="chart-box"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="card" id="distCard">
+        <h3>Rating Distribution — Click a segment to explore</h3>
+        <div class="chart-box"><canvas id="donutChart"></canvas></div>
+        <p class="click-hint">Click any slice to see apps in that range</p>
+        <div class="dist-panel" id="distPanel">
+          <div class="dist-panel-header">
+            <h4 id="distPanelTitle">—</h4>
+            <button class="close-btn" id="distPanelClose">Close</button>
+          </div>
+          <ul class="dist-app-list" id="distPanelList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom 10 Table -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Bottom 10 — Lowest Rated Apps</h2>
+        <span class="pill pill-danger">Watch List</span>
+      </div>
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>#</th><th>App</th><th>Rating</th><th>Ratings</th><th>Signal</th>
+          </tr></thead>
+          <tbody id="bottom10Body"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- AI Analysis -->
+    <div class="section">
+      <div class="section-head">
+        <h2>AI Quality Analysis</h2>
+        <span class="pill pill-accent">Insights</span>
+      </div>
+      <div class="analysis-grid" id="analysisCards"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: 24h Changes ═══════════ -->
+  <div class="tab-content" id="tab-changes">
+    <div class="section">
+      <div class="section-head">
+        <h2>Apps With Rating Changes (Last 24 Hours)</h2>
+        <span class="pill pill-warning" id="changesCount">—</span>
+      </div>
+      <div id="changesEmpty" class="empty-state" style="display:none">
+        No rating changes detected between snapshots. Changes appear when ratings shift between consecutive daily scrapes.
+      </div>
+      <div class="table-card" id="changesTable" style="display:none"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>App</th>
+            <th>Previous</th>
+            <th>Current</th>
+            <th>Change</th>
+            <th>Direction</th>
+          </tr></thead>
+          <tbody id="changesBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: At Risk ═══════════ -->
+  <div class="tab-content" id="tab-atRisk">
+    <div class="section">
+      <div class="section-head">
+        <h2>Apps At Risk</h2>
+        <span class="pill pill-danger" id="atRiskCount">—</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px">
+        Apps flagged for attention: rating below 70% or dropped 5+ points in the last 7 days.
+      </p>
+      <div id="atRiskEmpty" class="empty-state" style="display:none">
+        No apps currently flagged as at risk. All apps are performing within acceptable thresholds.
+      </div>
+      <div class="table-card" id="atRiskTable" style="display:none"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>App</th><th>Rating</th><th>7-Day Change</th><th>Reason</th>
+          </tr></thead>
+          <tbody id="atRiskBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: Stable ═══════════ -->
+  <div class="tab-content" id="tab-stable">
+    <div class="section">
+      <div class="section-head">
+        <h2>Stable Apps</h2>
+        <span class="pill pill-ok" id="stableCount">—</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px">
+        Apps with no significant rating changes (≤1 point) over the past 7 days.
+      </p>
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>App</th><th>Rating</th><th>Ratings</th><th>7-Day Change</th>
+          </tr></thead>
+          <tbody id="stableBody"></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Setapp App Rating Monitor &middot; Data from <a href="https://setapp.com/apps" target="_blank">setapp.com</a> &middot;
+    Generated <span id="footerDate">—</span>
+  </div>
+
+  </div><!-- /dashboardContent -->
+</div>
+
+<script>const EMBEDDED_DATA = {"generated_at": "2026-03-13 13:24", "snapshot_date": "2026-03-13", "previous_date": null, "snapshot_count": 1, "total_apps": 271, "total_discovered": 273, "avg_rating": 90.6, "min_rating": 52.0, "max_rating": 100.0, "bottom10": [{"app_name": "OrcaSheets", "app_slug": "orcasheets", "app_url": "https://setapp.com/apps/orcasheets", "rating_score": 52.0, "rating_count": 25, "snapshot_date": "2026-03-13"}, {"app_name": "CleanMy\u00aePhone", "app_slug": "cleanmyphone", "app_url": "https://setapp.com/apps/cleanmyphone", "rating_score": 58.0, "rating_count": 38, "snapshot_date": "2026-03-13"}, {"app_name": "Quip", "app_slug": "quip", "app_url": "https://setapp.com/apps/quip", "rating_score": 60.0, "rating_count": 35, "snapshot_date": "2026-03-13"}, {"app_name": "TaoGit", "app_slug": "taogit", "app_url": "https://setapp.com/apps/taogit", "rating_score": 62.0, "rating_count": 52, "snapshot_date": "2026-03-13"}, {"app_name": "Headway", "app_slug": "headway", "app_url": "https://setapp.com/apps/headway", "rating_score": 65.0, "rating_count": 63, "snapshot_date": "2026-03-13"}, {"app_name": "SwiftyLaunch", "app_slug": "swiftylaunch", "app_url": "https://setapp.com/apps/swiftylaunch", "rating_score": 65.0, "rating_count": 52, "snapshot_date": "2026-03-13"}, {"app_name": "Tab Finder", "app_slug": "tabfinder", "app_url": "https://setapp.com/apps/tabfinder", "rating_score": 67.0, "rating_count": 160, "snapshot_date": "2026-03-13"}, {"app_name": "n-Track Studio", "app_slug": "n-track-studio", "app_url": "https://setapp.com/apps/n-track-studio", "rating_score": 67.0, "rating_count": 87, "snapshot_date": "2026-03-13"}, {"app_name": "Telescopo", "app_slug": "telescopo", "app_url": "https://setapp.com/apps/telescopo", "rating_score": 68.0, "rating_count": 28, "snapshot_date": "2026-03-13"}, {"app_name": "Sidebar", "app_slug": "sidebar", "app_url": "https://setapp.com/apps/sidebar", "rating_score": 69.0, "rating_count": 261, "snapshot_date": "2026-03-13"}], "top10": [{"app_name": "Supercharge", "app_slug": "supercharge", "app_url": "https://setapp.com/apps/supercharge", "rating_score": 100.0, "rating_count": 679, "snapshot_date": "2026-03-13"}, {"app_name": "Eney Beta", "app_slug": "eney", "app_url": "https://setapp.com/apps/eney", "rating_score": 100.0, "rating_count": null, "snapshot_date": "2026-03-13"}, {"app_name": "PopChar", "app_slug": "popchar", "app_url": "https://setapp.com/apps/popchar", "rating_score": 100.0, "rating_count": 68, "snapshot_date": "2026-03-13"}, {"app_name": "Shortcutie", "app_slug": "shortcutie", "app_url": "https://setapp.com/apps/shortcutie", "rating_score": 100.0, "rating_count": 11, "snapshot_date": "2026-03-13"}, {"app_name": "Unite Pro", "app_slug": "unite", "app_url": "https://setapp.com/apps/unite", "rating_score": 100.0, "rating_count": null, "snapshot_date": "2026-03-13"}, {"app_name": "CleanShot X", "app_slug": "cleanshot", "app_url": "https://setapp.com/apps/cleanshot", "rating_score": 99.0, "rating_count": 13587, "snapshot_date": "2026-03-13"}, {"app_name": "TextSniper", "app_slug": "textsniper", "app_url": "https://setapp.com/apps/textsniper", "rating_score": 99.0, "rating_count": 3441, "snapshot_date": "2026-03-13"}, {"app_name": "Numi", "app_slug": "numi", "app_url": "https://setapp.com/apps/numi", "rating_score": 99.0, "rating_count": 2413, "snapshot_date": "2026-03-13"}, {"app_name": "TablePlus", "app_slug": "tableplus", "app_url": "https://setapp.com/apps/tableplus", "rating_score": 99.0, "rating_count": 2409, "snapshot_date": "2026-03-13"}, {"app_name": "Yoink", "app_slug": "yoink", "app_url": "https://setapp.com/apps/yoink", "rating_score": 99.0, "rating_count": 1871, "snapshot_date": "2026-03-13"}], "distribution": [{"bucket": "95-100", "count": 124}, {"bucket": "90-94", "count": 60}, {"bucket": "80-89", "count": 53}, {"bucket": "70-79", "count": 24}, {"bucket": "60-69", "count": 8}, {"bucket": "Below 60", "count": 2}], "apps_by_bucket": {"95-100": [{"app_name": "Supercharge", "app_slug": "supercharge", "app_url": "https://setapp.com/apps/supercharge", "rating_score": 100.0, "rating_count": 679}, {"app_name": "Eney Beta", "app_slug": "eney", "app_url": "https://setapp.com/apps/eney", "rating_score": 100.0, "rating_count": null}, {"app_name": "PopChar", "app_slug": "popchar", "app_url": "https://setapp.com/apps/popchar", "rating_score": 100.0, "rating_count": 68}, {"app_name": "Shortcutie", "app_slug": "shortcutie", "app_url": "https://setapp.com/apps/shortcutie", "rating_score": 100.0, "rating_count": 11}, {"app_name": "Unite Pro", "app_slug": "unite", "app_url": "https://setapp.com/apps/unite", "rating_score": 100.0, "rating_count": null}, {"app_name": "CleanShot X", "app_slug": "cleanshot", "app_url": "https://setapp.com/apps/cleanshot", "rating_score": 99.0, "rating_count": 13587}, {"app_name": "TextSniper", "app_slug": "textsniper", "app_url": "https://setapp.com/apps/textsniper", "rating_score": 99.0, "rating_count": 3441}, {"app_name": "Numi", "app_slug": "numi", "app_url": "https://setapp.com/apps/numi", "rating_score": 99.0, "rating_count": 2413}, {"app_name": "TablePlus", "app_slug": "tableplus", "app_url": "https://setapp.com/apps/tableplus", "rating_score": 99.0, "rating_count": 2409}, {"app_name": "Yoink", "app_slug": "yoink", "app_url": "https://setapp.com/apps/yoink", "rating_score": 99.0, "rating_count": 1871}, {"app_name": "MindNode Classic", "app_slug": "mindnode", "app_url": "https://setapp.com/apps/mindnode", "rating_score": 99.0, "rating_count": 1864}, {"app_name": "DevUtils", "app_slug": "devutils.app", "app_url": "https://setapp.com/apps/devutils.app", "rating_score": 99.0, "rating_count": 1715}, {"app_name": "Lungo", "app_slug": "lungo", "app_url": "https://setapp.com/apps/lungo", "rating_score": 99.0, "rating_count": 1678}, {"app_name": "PixelSnap", "app_slug": "pixelsnap", "app_url": "https://setapp.com/apps/pixelsnap", "rating_score": 99.0, "rating_count": 1444}, {"app_name": "Dash", "app_slug": "dash", "app_url": "https://setapp.com/apps/dash", "rating_score": 99.0, "rating_count": 1187}, {"app_name": "Dropzone", "app_slug": "dropzone", "app_url": "https://setapp.com/apps/dropzone", "rating_score": 99.0, "rating_count": 1152}, {"app_name": "HazeOver", "app_slug": "hazeover", "app_url": "https://setapp.com/apps/hazeover", "rating_score": 99.0, "rating_count": 1147}, {"app_name": "Proxyman", "app_slug": "proxyman", "app_url": "https://setapp.com/apps/proxyman", "rating_score": 99.0, "rating_count": 1034}, {"app_name": "Soulver", "app_slug": "soulver", "app_url": "https://setapp.com/apps/soulver", "rating_score": 99.0, "rating_count": 973}, {"app_name": "Dato", "app_slug": "dato", "app_url": "https://setapp.com/apps/dato", "rating_score": 99.0, "rating_count": 814}, {"app_name": "SnippetsLab", "app_slug": "snippetslab", "app_url": "https://setapp.com/apps/snippetslab", "rating_score": 99.0, "rating_count": 756}, {"app_name": "In Your Face", "app_slug": "in-your-face", "app_url": "https://setapp.com/apps/in-your-face", "rating_score": 99.0, "rating_count": 742}, {"app_name": "TextSoap", "app_slug": "textsoap", "app_url": "https://setapp.com/apps/textsoap", "rating_score": 99.0, "rating_count": 650}, {"app_name": "SnapMotion", "app_slug": "snapmotion", "app_url": "https://setapp.com/apps/snapmotion", "rating_score": 99.0, "rating_count": 200}, {"app_name": "Lasso", "app_slug": "lasso", "app_url": "https://setapp.com/apps/lasso", "rating_score": 99.0, "rating_count": 117}, {"app_name": "Buildwatch", "app_slug": "buildwatch", "app_url": "https://setapp.com/apps/buildwatch", "rating_score": 99.0, "rating_count": 79}, {"app_name": "Bartender", "app_slug": "bartender", "app_url": "https://setapp.com/apps/bartender", "rating_score": 98.0, "rating_count": 15306}, {"app_name": "Paste", "app_slug": "paste", "app_url": "https://setapp.com/apps/paste", "rating_score": 98.0, "rating_count": 6808}, {"app_name": "Downie", "app_slug": "downie", "app_url": "https://setapp.com/apps/downie", "rating_score": 98.0, "rating_count": 5223}, {"app_name": "Permute", "app_slug": "permute", "app_url": "https://setapp.com/apps/permute", "rating_score": 98.0, "rating_count": 4198}, {"app_name": "AlDente Pro", "app_slug": "aldente-pro", "app_url": "https://setapp.com/apps/aldente-pro", "rating_score": 98.0, "rating_count": 3264}, {"app_name": "BetterTouchTool", "app_slug": "bettertouchtool", "app_url": "https://setapp.com/apps/bettertouchtool", "rating_score": 98.0, "rating_count": 3237}, {"app_name": "Ulysses", "app_slug": "ulysses", "app_url": "https://setapp.com/apps/ulysses", "rating_score": 98.0, "rating_count": 2306}, {"app_name": "Timing", "app_slug": "timing", "app_url": "https://setapp.com/apps/timing", "rating_score": 98.0, "rating_count": 2060}, {"app_name": "Session", "app_slug": "session", "app_url": "https://setapp.com/apps/session", "rating_score": 98.0, "rating_count": 2059}, {"app_name": "One Switch", "app_slug": "one-switch", "app_url": "https://setapp.com/apps/one-switch", "rating_score": 98.0, "rating_count": 1972}, {"app_name": "QuitAll", "app_slug": "quit-all-mac", "app_url": "https://setapp.com/apps/quit-all-mac", "rating_score": 98.0, "rating_count": 1765}, {"app_name": "PDF Squeezer", "app_slug": "pdf-squeezer", "app_url": "https://setapp.com/apps/pdf-squeezer", "rating_score": 98.0, "rating_count": 1654}, {"app_name": "Elmedia Player", "app_slug": "elmedia-player", "app_url": "https://setapp.com/apps/elmedia-player", "rating_score": 98.0, "rating_count": 1408}, {"app_name": "PopClip", "app_slug": "popclip", "app_url": "https://setapp.com/apps/popclip", "rating_score": 98.0, "rating_count": 1264}, {"app_name": "Movist Pro", "app_slug": "movist-pro", "app_url": "https://setapp.com/apps/movist-pro", "rating_score": 98.0, "rating_count": 970}, {"app_name": "HoudahSpot", "app_slug": "houdahspot", "app_url": "https://setapp.com/apps/houdahspot", "rating_score": 98.0, "rating_count": 874}, {"app_name": "Typeface", "app_slug": "typeface", "app_url": "https://setapp.com/apps/typeface", "rating_score": 98.0, "rating_count": 779}, {"app_name": "TouchRetouch", "app_slug": "touchretouch", "app_url": "https://setapp.com/apps/touchretouch", "rating_score": 98.0, "rating_count": 743}, {"app_name": "Gifox", "app_slug": "gifox", "app_url": "https://setapp.com/apps/gifox", "rating_score": 98.0, "rating_count": 664}, {"app_name": "Unclutter", "app_slug": "unclutter", "app_url": "https://setapp.com/apps/unclutter", "rating_score": 98.0, "rating_count": 630}, {"app_name": "Paletro", "app_slug": "paletro", "app_url": "https://setapp.com/apps/paletro", "rating_score": 98.0, "rating_count": 449}, {"app_name": "IconJar", "app_slug": "iconjar", "app_url": "https://setapp.com/apps/iconjar", "rating_score": 98.0, "rating_count": 423}, {"app_name": "TaskPaper", "app_slug": "taskpaper", "app_url": "https://setapp.com/apps/taskpaper", "rating_score": 98.0, "rating_count": 298}, {"app_name": "Antinote", "app_slug": "antinote", "app_url": "https://setapp.com/apps/antinote", "rating_score": 98.0, "rating_count": 225}, {"app_name": "LookAway", "app_slug": "lookaway", "app_url": "https://setapp.com/apps/lookaway", "rating_score": 98.0, "rating_count": 209}, {"app_name": "Bike", "app_slug": "bike-outliner", "app_url": "https://setapp.com/apps/bike-outliner", "rating_score": 98.0, "rating_count": 190}, {"app_name": "Hype", "app_slug": "hype", "app_url": "https://setapp.com/apps/hype", "rating_score": 98.0, "rating_count": 123}, {"app_name": "Goldie App", "app_slug": "goldie-app", "app_url": "https://setapp.com/apps/goldie-app", "rating_score": 98.0, "rating_count": 103}, {"app_name": "CleanMyMac", "app_slug": "cleanmymac", "app_url": "https://setapp.com/apps/cleanmymac", "rating_score": 97.0, "rating_count": 17462}, {"app_name": "iStat Menus", "app_slug": "istat-menus", "app_url": "https://setapp.com/apps/istat-menus", "rating_score": 97.0, "rating_count": 5326}, {"app_name": "Pulltube", "app_slug": "pulltube", "app_url": "https://setapp.com/apps/pulltube", "rating_score": 97.0, "rating_count": 1680}, {"app_name": "Archiver", "app_slug": "archiver", "app_url": "https://setapp.com/apps/archiver", "rating_score": 97.0, "rating_count": 1580}, {"app_name": "SideNotes", "app_slug": "sidenotes", "app_url": "https://setapp.com/apps/sidenotes", "rating_score": 97.0, "rating_count": 1419}, {"app_name": "NotePlan", "app_slug": "noteplan", "app_url": "https://setapp.com/apps/noteplan", "rating_score": 97.0, "rating_count": 1382}, {"app_name": "24 Hour Wallpaper", "app_slug": "24-hour-wallpaper", "app_url": "https://setapp.com/apps/24-hour-wallpaper", "rating_score": 97.0, "rating_count": 1347}, {"app_name": "Default Folder X", "app_slug": "default-folder-x", "app_url": "https://setapp.com/apps/default-folder-x", "rating_score": 97.0, "rating_count": 1158}, {"app_name": "OpenIn", "app_slug": "openin", "app_url": "https://setapp.com/apps/openin", "rating_score": 97.0, "rating_count": 1077}, {"app_name": "Mission Control Plus", "app_slug": "mission-control-plus", "app_url": "https://setapp.com/apps/mission-control-plus", "rating_score": 97.0, "rating_count": 1039}, {"app_name": "Swish", "app_slug": "swish", "app_url": "https://setapp.com/apps/swish", "rating_score": 97.0, "rating_count": 1009}, {"app_name": "TripMode", "app_slug": "tripmode", "app_url": "https://setapp.com/apps/tripmode", "rating_score": 97.0, "rating_count": 751}, {"app_name": "Pareto Security", "app_slug": "pareto-security", "app_url": "https://setapp.com/apps/pareto-security", "rating_score": 97.0, "rating_count": 712}, {"app_name": "SQLPro Studio", "app_slug": "sqlpro-studio", "app_url": "https://setapp.com/apps/sqlpro-studio", "rating_score": 97.0, "rating_count": 632}, {"app_name": "WiFi Explorer", "app_slug": "wifi-explorer", "app_url": "https://setapp.com/apps/wifi-explorer", "rating_score": 97.0, "rating_count": 627}, {"app_name": "Step Two", "app_slug": "step-two", "app_url": "https://setapp.com/apps/step-two", "rating_score": 97.0, "rating_count": 457}, {"app_name": "PhotoBulk", "app_slug": "photobulk", "app_url": "https://setapp.com/apps/photobulk", "rating_score": 97.0, "rating_count": 423}, {"app_name": "Be Focused", "app_slug": "be-focused", "app_url": "https://setapp.com/apps/be-focused", "rating_score": 97.0, "rating_count": 387}, {"app_name": "Diarly", "app_slug": "diarly", "app_url": "https://setapp.com/apps/diarly", "rating_score": 97.0, "rating_count": 376}, {"app_name": "Awesome Habits", "app_slug": "awesome-habits", "app_url": "https://setapp.com/apps/awesome-habits", "rating_score": 97.0, "rating_count": 287}, {"app_name": "Merlin Project Express", "app_slug": "merlin-project-express", "app_url": "https://setapp.com/apps/merlin-project-express", "rating_score": 97.0, "rating_count": 231}, {"app_name": "Usage", "app_slug": "usage", "app_url": "https://setapp.com/apps/usage", "rating_score": 97.0, "rating_count": 210}, {"app_name": "Godspeed", "app_slug": "godspeed", "app_url": "https://setapp.com/apps/godspeed", "rating_score": 97.0, "rating_count": 184}, {"app_name": "Base", "app_slug": "base", "app_url": "https://setapp.com/apps/base", "rating_score": 97.0, "rating_count": 118}, {"app_name": "Transloader", "app_slug": "transloader", "app_url": "https://setapp.com/apps/transloader", "rating_score": 97.0, "rating_count": 91}, {"app_name": "Flinto", "app_slug": "flinto", "app_url": "https://setapp.com/apps/flinto", "rating_score": 97.0, "rating_count": 58}, {"app_name": "BetterZip", "app_slug": "betterzip", "app_url": "https://setapp.com/apps/betterzip", "rating_score": 96.0, "rating_count": 2493}, {"app_name": "ForkLift", "app_slug": "forklift", "app_url": "https://setapp.com/apps/forklift", "rating_score": 96.0, "rating_count": 2200}, {"app_name": "BusyCal", "app_slug": "busycal", "app_url": "https://setapp.com/apps/busycal", "rating_score": 96.0, "rating_count": 2041}, {"app_name": "Craft", "app_slug": "craft", "app_url": "https://setapp.com/apps/craft", "rating_score": 96.0, "rating_count": 1947}, {"app_name": "AirBuddy", "app_slug": "airbuddy", "app_url": "https://setapp.com/apps/airbuddy", "rating_score": 96.0, "rating_count": 1542}, {"app_name": "CodeRunner", "app_slug": "coderunner", "app_url": "https://setapp.com/apps/coderunner", "rating_score": 96.0, "rating_count": 1266}, {"app_name": "Renamer", "app_slug": "renamer", "app_url": "https://setapp.com/apps/renamer", "rating_score": 96.0, "rating_count": 1007}, {"app_name": "Xnapper", "app_slug": "xnapper", "app_url": "https://setapp.com/apps/xnapper", "rating_score": 96.0, "rating_count": 851}, {"app_name": "Hand Mirror", "app_slug": "hand-mirror", "app_url": "https://setapp.com/apps/hand-mirror", "rating_score": 96.0, "rating_count": 661}, {"app_name": "Hookmark", "app_slug": "hookmark", "app_url": "https://setapp.com/apps/hookmark", "rating_score": 96.0, "rating_count": 509}, {"app_name": "Magic Window Air", "app_slug": "magic-window-air", "app_url": "https://setapp.com/apps/magic-window-air", "rating_score": 96.0, "rating_count": 491}, {"app_name": "News Explorer", "app_slug": "news-explorer", "app_url": "https://setapp.com/apps/news-explorer", "rating_score": 96.0, "rating_count": 431}, {"app_name": "Due", "app_slug": "due", "app_url": "https://setapp.com/apps/due", "rating_score": 96.0, "rating_count": 428}, {"app_name": "Meta", "app_slug": "meta", "app_url": "https://setapp.com/apps/meta", "rating_score": 96.0, "rating_count": 402}, {"app_name": "SSH Config Editor", "app_slug": "ssh-config-editor", "app_url": "https://setapp.com/apps/ssh-config-editor", "rating_score": 96.0, "rating_count": 338}, {"app_name": "NetSpot", "app_slug": "netspot", "app_url": "https://setapp.com/apps/netspot", "rating_score": 96.0, "rating_count": 333}, {"app_name": "Receipts", "app_slug": "receipts", "app_url": "https://setapp.com/apps/receipts", "rating_score": 96.0, "rating_count": 233}, {"app_name": "PhotosRevive", "app_slug": "photosrevive", "app_url": "https://setapp.com/apps/photosrevive", "rating_score": 96.0, "rating_count": 159}, {"app_name": "Paper", "app_slug": "paper", "app_url": "https://setapp.com/apps/paper", "rating_score": 96.0, "rating_count": 145}, {"app_name": "SQLPro for SQLite", "app_slug": "sqlpro-for-sqlite", "app_url": "https://setapp.com/apps/sqlpro-for-sqlite", "rating_score": 96.0, "rating_count": 112}, {"app_name": "Studies", "app_slug": "studies", "app_url": "https://setapp.com/apps/studies", "rating_score": 96.0, "rating_count": 85}, {"app_name": "Strongbox", "app_slug": "strongbox", "app_url": "https://setapp.com/apps/strongbox", "rating_score": 96.0, "rating_count": 46}, {"app_name": "Prizmo Remix", "app_slug": "prizmo-remix", "app_url": "https://setapp.com/apps/prizmo-remix", "rating_score": 96.0, "rating_count": 23}, {"app_name": "Folx", "app_slug": "folx", "app_url": "https://setapp.com/apps/folx", "rating_score": 95.0, "rating_count": 1741}, {"app_name": "Forecast Bar", "app_slug": "forecast-bar", "app_url": "https://setapp.com/apps/forecast-bar", "rating_score": 95.0, "rating_count": 714}, {"app_name": "Timemator", "app_slug": "timemator", "app_url": "https://setapp.com/apps/timemator", "rating_score": 95.0, "rating_count": 683}, {"app_name": "Gitfox", "app_slug": "gitfox", "app_url": "https://setapp.com/apps/gitfox", "rating_score": 95.0, "rating_count": 669}, {"app_name": "App Tamer", "app_slug": "app-tamer", "app_url": "https://setapp.com/apps/app-tamer", "rating_score": 95.0, "rating_count": 663}, {"app_name": "Commander One", "app_slug": "commander-one", "app_url": "https://setapp.com/apps/commander-one", "rating_score": 95.0, "rating_count": 659}, {"app_name": "Marked", "app_slug": "marked", "app_url": "https://setapp.com/apps/marked", "rating_score": 95.0, "rating_count": 616}, {"app_name": "Keysmith", "app_slug": "keysmith", "app_url": "https://setapp.com/apps/keysmith", "rating_score": 95.0, "rating_count": 485}, {"app_name": "KeyKey Typing Tutor", "app_slug": "keykey-typing-tutor", "app_url": "https://setapp.com/apps/keykey-typing-tutor", "rating_score": 95.0, "rating_count": 482}, {"app_name": "BoltAI", "app_slug": "boltai", "app_url": "https://setapp.com/apps/boltai", "rating_score": 95.0, "rating_count": 461}, {"app_name": "ChronoSync Express", "app_slug": "chronosync-express", "app_url": "https://setapp.com/apps/chronosync-express", "rating_score": 95.0, "rating_count": 439}, {"app_name": "Presentify", "app_slug": "presentify", "app_url": "https://setapp.com/apps/presentify", "rating_score": 95.0, "rating_count": 423}, {"app_name": "Whisk", "app_slug": "whisk", "app_url": "https://setapp.com/apps/whisk", "rating_score": 95.0, "rating_count": 202}, {"app_name": "start", "app_slug": "start", "app_url": "https://setapp.com/apps/start", "rating_score": 95.0, "rating_count": 184}, {"app_name": "Time Out", "app_slug": "time-out", "app_url": "https://setapp.com/apps/time-out", "rating_score": 95.0, "rating_count": 177}, {"app_name": "Trickster", "app_slug": "trickster", "app_url": "https://setapp.com/apps/trickster", "rating_score": 95.0, "rating_count": 176}, {"app_name": "Euclid", "app_slug": "euclid", "app_url": "https://setapp.com/apps/euclid", "rating_score": 95.0, "rating_count": 129}, {"app_name": "Glyphs Mini", "app_slug": "glyphs-mini", "app_url": "https://setapp.com/apps/glyphs-mini", "rating_score": 95.0, "rating_count": 127}, {"app_name": "Novabench", "app_slug": "novabench", "app_url": "https://setapp.com/apps/novabench", "rating_score": 95.0, "rating_count": 109}, {"app_name": "Asset Catalog Creator Pro", "app_slug": "asset-catalog-creator-pro", "app_url": "https://setapp.com/apps/asset-catalog-creator-pro", "rating_score": 95.0, "rating_count": 84}, {"app_name": "ScreenFloat", "app_slug": "screenfloat", "app_url": "https://setapp.com/apps/screenfloat", "rating_score": 95.0, "rating_count": 74}], "90-94": [{"app_name": "Mockuuups Studio", "app_slug": "mockuuups-studio", "app_url": "https://setapp.com/apps/mockuuups-studio", "rating_score": 94.0, "rating_count": 587}, {"app_name": "Endurance", "app_slug": "endurance", "app_url": "https://setapp.com/apps/endurance", "rating_score": 94.0, "rating_count": 579}, {"app_name": "ToothFairy", "app_slug": "toothfairy", "app_url": "https://setapp.com/apps/toothfairy", "rating_score": 94.0, "rating_count": 412}, {"app_name": "Expressions", "app_slug": "expressions", "app_url": "https://setapp.com/apps/expressions", "rating_score": 94.0, "rating_count": 362}, {"app_name": "Workspaces", "app_slug": "workspaces", "app_url": "https://setapp.com/apps/workspaces", "rating_score": 94.0, "rating_count": 351}, {"app_name": "MenubarX", "app_slug": "menubarx", "app_url": "https://setapp.com/apps/menubarx", "rating_score": 94.0, "rating_count": 262}, {"app_name": "iFlicks", "app_slug": "iflicks", "app_url": "https://setapp.com/apps/iflicks", "rating_score": 94.0, "rating_count": 156}, {"app_name": "MindNode Next", "app_slug": "mindnode-next", "app_url": "https://setapp.com/apps/mindnode-next", "rating_score": 94.0, "rating_count": 113}, {"app_name": "PocketCAS", "app_slug": "pocketcas", "app_url": "https://setapp.com/apps/pocketcas", "rating_score": 94.0, "rating_count": 49}, {"app_name": "Evenlight", "app_slug": "evenlight", "app_url": "https://setapp.com/apps/evenlight", "rating_score": 94.0, "rating_count": 17}, {"app_name": "Gemini", "app_slug": "gemini", "app_url": "https://setapp.com/apps/gemini", "rating_score": 93.0, "rating_count": 2175}, {"app_name": "Sip", "app_slug": "sip", "app_url": "https://setapp.com/apps/sip", "rating_score": 93.0, "rating_count": 1588}, {"app_name": "BusyContacts", "app_slug": "busycontacts", "app_url": "https://setapp.com/apps/busycontacts", "rating_score": 93.0, "rating_count": 640}, {"app_name": "Core Shell", "app_slug": "core-shell", "app_url": "https://setapp.com/apps/core-shell", "rating_score": 93.0, "rating_count": 556}, {"app_name": "Lofi Garden", "app_slug": "lofi-garden", "app_url": "https://setapp.com/apps/lofi-garden", "rating_score": 93.0, "rating_count": 532}, {"app_name": "Dropshare", "app_slug": "dropshare", "app_url": "https://setapp.com/apps/dropshare", "rating_score": 93.0, "rating_count": 415}, {"app_name": "WiFi Signal", "app_slug": "wifi-signal", "app_url": "https://setapp.com/apps/wifi-signal", "rating_score": 93.0, "rating_count": 389}, {"app_name": "2Do", "app_slug": "2do", "app_url": "https://setapp.com/apps/2do", "rating_score": 93.0, "rating_count": 387}, {"app_name": "GoodTask", "app_slug": "goodtask", "app_url": "https://setapp.com/apps/goodtask", "rating_score": 93.0, "rating_count": 382}, {"app_name": "Noizio", "app_slug": "noizio", "app_url": "https://setapp.com/apps/noizio", "rating_score": 93.0, "rating_count": 298}, {"app_name": "MetaImage", "app_slug": "metaimage", "app_url": "https://setapp.com/apps/metaimage", "rating_score": 93.0, "rating_count": 231}, {"app_name": "Swift Publisher", "app_slug": "swift-publisher", "app_url": "https://setapp.com/apps/swift-publisher", "rating_score": 93.0, "rating_count": 183}, {"app_name": "Eter", "app_slug": "eter", "app_url": "https://setapp.com/apps/eter", "rating_score": 93.0, "rating_count": 158}, {"app_name": "Clariti", "app_slug": "clariti", "app_url": "https://setapp.com/apps/clariti", "rating_score": 93.0, "rating_count": 152}, {"app_name": "MarsEdit", "app_slug": "marsedit", "app_url": "https://setapp.com/apps/marsedit", "rating_score": 93.0, "rating_count": 135}, {"app_name": "Cloud Outliner", "app_slug": "cloud-outliner", "app_url": "https://setapp.com/apps/cloud-outliner", "rating_score": 93.0, "rating_count": 88}, {"app_name": "Movie Explorer Pro", "app_slug": "movie-explorer-pro", "app_url": "https://setapp.com/apps/movie-explorer-pro", "rating_score": 93.0, "rating_count": 87}, {"app_name": "DeskMinder\u00b2", "app_slug": "deskminder", "app_url": "https://setapp.com/apps/deskminder", "rating_score": 93.0, "rating_count": 86}, {"app_name": "GlueMotion", "app_slug": "gluemotion", "app_url": "https://setapp.com/apps/gluemotion", "rating_score": 93.0, "rating_count": 70}, {"app_name": "JoyCast", "app_slug": "joycast", "app_url": "https://setapp.com/apps/joycast", "rating_score": 93.0, "rating_count": 68}, {"app_name": "Mosaic", "app_slug": "mosaic", "app_url": "https://setapp.com/apps/mosaic", "rating_score": 92.0, "rating_count": 2532}, {"app_name": "Path Finder", "app_slug": "path-finder", "app_url": "https://setapp.com/apps/path-finder", "rating_score": 92.0, "rating_count": 1528}, {"app_name": "DisplayBuddy", "app_slug": "displaybuddy", "app_url": "https://setapp.com/apps/displaybuddy", "rating_score": 92.0, "rating_count": 1045}, {"app_name": "CloudMounter", "app_slug": "cloudmounter", "app_url": "https://setapp.com/apps/cloudmounter", "rating_score": 92.0, "rating_count": 1004}, {"app_name": "Squash", "app_slug": "squash", "app_url": "https://setapp.com/apps/squash", "rating_score": 92.0, "rating_count": 899}, {"app_name": "Slidepad", "app_slug": "slidepad", "app_url": "https://setapp.com/apps/slidepad", "rating_score": 92.0, "rating_count": 512}, {"app_name": "MarginNote", "app_slug": "marginnote", "app_url": "https://setapp.com/apps/marginnote", "rating_score": 92.0, "rating_count": 478}, {"app_name": "VidCap", "app_slug": "vidcap", "app_url": "https://setapp.com/apps/vidcap", "rating_score": 92.0, "rating_count": 440}, {"app_name": "Prizmo", "app_slug": "prizmo", "app_url": "https://setapp.com/apps/prizmo", "rating_score": 92.0, "rating_count": 420}, {"app_name": "PDF Search", "app_slug": "pdf-search", "app_url": "https://setapp.com/apps/pdf-search", "rating_score": 92.0, "rating_count": 364}, {"app_name": "Almighty", "app_slug": "almighty", "app_url": "https://setapp.com/apps/almighty", "rating_score": 92.0, "rating_count": 266}, {"app_name": "Muse", "app_slug": "muse", "app_url": "https://setapp.com/apps/muse", "rating_score": 92.0, "rating_count": 206}, {"app_name": "Focused", "app_slug": "focused", "app_url": "https://setapp.com/apps/focused", "rating_score": 92.0, "rating_count": 139}, {"app_name": "Pagico", "app_slug": "pagico", "app_url": "https://setapp.com/apps/pagico", "rating_score": 92.0, "rating_count": 137}, {"app_name": "Desktop Composer", "app_slug": "desktop-composer", "app_url": "https://setapp.com/apps/desktop-composer", "rating_score": 92.0, "rating_count": 24}, {"app_name": "Boom 3D", "app_slug": "boom-3d", "app_url": "https://setapp.com/apps/boom-3d", "rating_score": 91.0, "rating_count": 1742}, {"app_name": "Tripsy", "app_slug": "tripsy", "app_url": "https://setapp.com/apps/tripsy", "rating_score": 91.0, "rating_count": 421}, {"app_name": "Chronicle", "app_slug": "chronicle", "app_url": "https://setapp.com/apps/chronicle", "rating_score": 91.0, "rating_count": 420}, {"app_name": "Diagrams", "app_slug": "diagrams", "app_url": "https://setapp.com/apps/diagrams", "rating_score": 91.0, "rating_count": 418}, {"app_name": "Moonlock", "app_slug": "moonlock", "app_url": "https://setapp.com/apps/moonlock", "rating_score": 91.0, "rating_count": 355}, {"app_name": "Daily", "app_slug": "daily", "app_url": "https://setapp.com/apps/daily", "rating_score": 91.0, "rating_count": 190}, {"app_name": "Amie", "app_slug": "amie", "app_url": "https://setapp.com/apps/amie", "rating_score": 91.0, "rating_count": 66}, {"app_name": "TranscribeX", "app_slug": "transcribex", "app_url": "https://setapp.com/apps/transcribex", "rating_score": 91.0, "rating_count": 66}, {"app_name": "TypingMind", "app_slug": "typingmind", "app_url": "https://setapp.com/apps/typingmind", "rating_score": 90.0, "rating_count": 1349}, {"app_name": "Luminar Neo", "app_slug": "luminar-neo", "app_url": "https://setapp.com/apps/luminar-neo", "rating_score": 90.0, "rating_count": 832}, {"app_name": "ChatMate for WhatsApp", "app_slug": "chatmate-for-whatsapp", "app_url": "https://setapp.com/apps/chatmate-for-whatsapp", "rating_score": 90.0, "rating_count": 649}, {"app_name": "CameraBag Pro", "app_slug": "camerabag-pro", "app_url": "https://setapp.com/apps/camerabag-pro", "rating_score": 90.0, "rating_count": 483}, {"app_name": "Moment", "app_slug": "moment", "app_url": "https://setapp.com/apps/moment", "rating_score": 90.0, "rating_count": 225}, {"app_name": "FocuSee", "app_slug": "focusee", "app_url": "https://setapp.com/apps/focusee", "rating_score": 90.0, "rating_count": 144}, {"app_name": "Teleprompter App", "app_slug": "teleprompter-app", "app_url": "https://setapp.com/apps/teleprompter-app", "rating_score": 90.0, "rating_count": 141}], "80-89": [{"app_name": "ClearVPN", "app_slug": "clearvpn", "app_url": "https://setapp.com/apps/clearvpn", "rating_score": 89.0, "rating_count": 3270}, {"app_name": "Nitro PDF Pro", "app_slug": "nitro-pdf-pro", "app_url": "https://setapp.com/apps/nitro-pdf-pro", "rating_score": 89.0, "rating_count": 2958}, {"app_name": "Spark Mail", "app_slug": "spark-mail", "app_url": "https://setapp.com/apps/spark-mail", "rating_score": 89.0, "rating_count": 2822}, {"app_name": "NotchNook", "app_slug": "notchnook", "app_url": "https://setapp.com/apps/notchnook", "rating_score": 89.0, "rating_count": 1329}, {"app_name": "WidgetWall", "app_slug": "widget-wall", "app_url": "https://setapp.com/apps/widget-wall", "rating_score": 89.0, "rating_count": 523}, {"app_name": "World Clock Pro", "app_slug": "world-clock-pro", "app_url": "https://setapp.com/apps/world-clock-pro", "rating_score": 89.0, "rating_count": 426}, {"app_name": "PDF Pals", "app_slug": "pdf-pals", "app_url": "https://setapp.com/apps/pdf-pals", "rating_score": 89.0, "rating_count": 370}, {"app_name": "WallCal", "app_slug": "wallcal", "app_url": "https://setapp.com/apps/wallcal", "rating_score": 89.0, "rating_count": 204}, {"app_name": "KeyCue", "app_slug": "keycue", "app_url": "https://setapp.com/apps/keycue", "rating_score": 89.0, "rating_count": 142}, {"app_name": "Tiny Shield", "app_slug": "tiny-shield", "app_url": "https://setapp.com/apps/tiny-shield", "rating_score": 89.0, "rating_count": 89}, {"app_name": "SlouchSniper", "app_slug": "slouchsniper", "app_url": "https://setapp.com/apps/slouchsniper", "rating_score": 89.0, "rating_count": 35}, {"app_name": "iBoysoft MagicMenu", "app_slug": "iboysoft-magicmenu", "app_url": "https://setapp.com/apps/iboysoft-magicmenu", "rating_score": 88.0, "rating_count": 414}, {"app_name": "Focused Work", "app_slug": "focused-work-mac", "app_url": "https://setapp.com/apps/focused-work-mac", "rating_score": 88.0, "rating_count": 89}, {"app_name": "GetAPI", "app_slug": "getapi", "app_url": "https://setapp.com/apps/getapi", "rating_score": 88.0, "rating_count": 68}, {"app_name": "iBoysoft NTFS for Mac", "app_slug": "iboysoft-ntfs-for-mac", "app_url": "https://setapp.com/apps/iboysoft-ntfs-for-mac", "rating_score": 87.0, "rating_count": 734}, {"app_name": "Batteries", "app_slug": "batteries", "app_url": "https://setapp.com/apps/batteries", "rating_score": 87.0, "rating_count": 507}, {"app_name": "Expenses", "app_slug": "expenses", "app_url": "https://setapp.com/apps/expenses", "rating_score": 87.0, "rating_count": 132}, {"app_name": "iBoysoft Data Recovery", "app_slug": "iboysoft-data-recovery", "app_url": "https://setapp.com/apps/iboysoft-data-recovery", "rating_score": 87.0, "rating_count": 55}, {"app_name": "Transcrybe", "app_slug": "transcrybe", "app_url": "https://setapp.com/apps/transcrybe", "rating_score": 87.0, "rating_count": 23}, {"app_name": "Capto", "app_slug": "capto", "app_url": "https://setapp.com/apps/capto", "rating_score": 86.0, "rating_count": 1026}, {"app_name": "Elephas", "app_slug": "elephas", "app_url": "https://setapp.com/apps/elephas", "rating_score": 86.0, "rating_count": 785}, {"app_name": "Get Backup Pro", "app_slug": "get-backup-pro", "app_url": "https://setapp.com/apps/get-backup-pro", "rating_score": 86.0, "rating_count": 306}, {"app_name": "Plus", "app_slug": "plus", "app_url": "https://setapp.com/apps/plus", "rating_score": 86.0, "rating_count": 273}, {"app_name": "Substage", "app_slug": "substage", "app_url": "https://setapp.com/apps/substage", "rating_score": 86.0, "rating_count": 83}, {"app_name": "JoyTap", "app_slug": "joytap", "app_url": "https://setapp.com/apps/joytap", "rating_score": 86.0, "rating_count": 79}, {"app_name": "Clobbr", "app_slug": "clobbr", "app_url": "https://setapp.com/apps/clobbr", "rating_score": 86.0, "rating_count": 36}, {"app_name": "Rocket Typist", "app_slug": "rocket-typist", "app_url": "https://setapp.com/apps/rocket-typist", "rating_score": 85.0, "rating_count": 614}, {"app_name": "Vivid", "app_slug": "vivid", "app_url": "https://setapp.com/apps/vivid", "rating_score": 85.0, "rating_count": 427}, {"app_name": "Calendars", "app_slug": "calendars", "app_url": "https://setapp.com/apps/calendars", "rating_score": 85.0, "rating_count": 355}, {"app_name": "AnyDroid", "app_slug": "anytrans-for-android", "app_url": "https://setapp.com/apps/anytrans-for-android", "rating_score": 85.0, "rating_count": 207}, {"app_name": "ByDesign", "app_slug": "bydesign", "app_url": "https://setapp.com/apps/bydesign", "rating_score": 85.0, "rating_count": 124}, {"app_name": "SheetPlanner", "app_slug": "sheetplanner", "app_url": "https://setapp.com/apps/sheetplanner", "rating_score": 85.0, "rating_count": 112}, {"app_name": "MonsterWriter", "app_slug": "monsterwriter", "app_url": "https://setapp.com/apps/monsterwriter", "rating_score": 85.0, "rating_count": 92}, {"app_name": "iMeetingX", "app_slug": "imeetingx", "app_url": "https://setapp.com/apps/imeetingx", "rating_score": 85.0, "rating_count": 47}, {"app_name": "GreenBooks", "app_slug": "greenbooks", "app_url": "https://setapp.com/apps/greenbooks", "rating_score": 84.0, "rating_count": 183}, {"app_name": "PliimPRO", "app_slug": "pliimpro", "app_url": "https://setapp.com/apps/pliimpro", "rating_score": 84.0, "rating_count": 140}, {"app_name": "Smmall Cloud", "app_slug": "smmall-cloud", "app_url": "https://setapp.com/apps/smmall-cloud", "rating_score": 84.0, "rating_count": 118}, {"app_name": "Hustl", "app_slug": "hustl", "app_url": "https://setapp.com/apps/hustl", "rating_score": 84.0, "rating_count": 101}, {"app_name": "Mimir", "app_slug": "mimir", "app_url": "https://setapp.com/apps/mimir", "rating_score": 84.0, "rating_count": 85}, {"app_name": "Riveo", "app_slug": "riveo-mac", "app_url": "https://setapp.com/apps/riveo-mac", "rating_score": 84.0, "rating_count": 31}, {"app_name": "DCommander", "app_slug": "dcommander", "app_url": "https://setapp.com/apps/dcommander", "rating_score": 83.0, "rating_count": 155}, {"app_name": "Boom", "app_slug": "boom", "app_url": "https://setapp.com/apps/boom", "rating_score": 82.0, "rating_count": 195}, {"app_name": "Speeko", "app_slug": "speeko", "app_url": "https://setapp.com/apps/speeko", "rating_score": 82.0, "rating_count": 117}, {"app_name": "Silenz", "app_slug": "silenz", "app_url": "https://setapp.com/apps/silenz", "rating_score": 82.0, "rating_count": 57}, {"app_name": "AppWage", "app_slug": "appwage", "app_url": "https://setapp.com/apps/appwage", "rating_score": 82.0, "rating_count": 11}, {"app_name": "MoneyWiz 2026", "app_slug": "moneywiz", "app_url": "https://setapp.com/apps/moneywiz", "rating_score": 81.0, "rating_count": 478}, {"app_name": "MurmurType", "app_slug": "murmur", "app_url": "https://setapp.com/apps/murmur", "rating_score": 81.0, "rating_count": 364}, {"app_name": "JustStream", "app_slug": "juststream", "app_url": "https://setapp.com/apps/juststream", "rating_score": 81.0, "rating_count": 227}, {"app_name": "Pie Menu", "app_slug": "pie-menu", "app_url": "https://setapp.com/apps/pie-menu", "rating_score": 81.0, "rating_count": 112}, {"app_name": "Requestly", "app_slug": "requestly", "app_url": "https://setapp.com/apps/requestly", "rating_score": 81.0, "rating_count": 32}, {"app_name": "WhisperTranscribe", "app_slug": "whisper-transcribe", "app_url": "https://setapp.com/apps/whisper-transcribe", "rating_score": 80.0, "rating_count": 297}, {"app_name": "Secrets 4", "app_slug": "secrets", "app_url": "https://setapp.com/apps/secrets", "rating_score": 80.0, "rating_count": 186}, {"app_name": "Typedesk", "app_slug": "typedesk-mac", "app_url": "https://setapp.com/apps/typedesk-mac", "rating_score": 80.0, "rating_count": 5}], "70-79": [{"app_name": "Spellar AI", "app_slug": "spellar-ai", "app_url": "https://setapp.com/apps/spellar-ai", "rating_score": 79.0, "rating_count": 373}, {"app_name": "Remote Mouse", "app_slug": "remote-mouse", "app_url": "https://setapp.com/apps/remote-mouse", "rating_score": 79.0, "rating_count": 113}, {"app_name": "Invoice Rex", "app_slug": "invoice-rex", "app_url": "https://setapp.com/apps/invoice-rex", "rating_score": 79.0, "rating_count": 24}, {"app_name": "Backtrack", "app_slug": "backtrack", "app_url": "https://setapp.com/apps/backtrack", "rating_score": 78.0, "rating_count": 499}, {"app_name": "FreeYourMusic", "app_slug": "freeyourmusic", "app_url": "https://setapp.com/apps/freeyourmusic", "rating_score": 78.0, "rating_count": 187}, {"app_name": "Simon", "app_slug": "simon", "app_url": "https://setapp.com/apps/simon", "rating_score": 78.0, "rating_count": 50}, {"app_name": "Chimeful", "app_slug": "chimeful", "app_url": "https://setapp.com/apps/chimeful", "rating_score": 78.0, "rating_count": 41}, {"app_name": "Taskheat", "app_slug": "taskheat", "app_url": "https://setapp.com/apps/taskheat", "rating_score": 77.0, "rating_count": 310}, {"app_name": "AnyTrans for iOS", "app_slug": "anytrans", "app_url": "https://setapp.com/apps/anytrans", "rating_score": 76.0, "rating_count": 549}, {"app_name": "iShowU", "app_slug": "ishowu", "app_url": "https://setapp.com/apps/ishowu", "rating_score": 76.0, "rating_count": 111}, {"app_name": "Lacona", "app_slug": "lacona", "app_url": "https://setapp.com/apps/lacona", "rating_score": 75.0, "rating_count": 71}, {"app_name": "UpLife", "app_slug": "uplife-mental-health-therapy-ios", "app_url": "https://setapp.com/apps/uplife-mental-health-therapy-ios", "rating_score": 75.0, "rating_count": 8}, {"app_name": "Coherence X", "app_slug": "coherence-pro", "app_url": "https://setapp.com/apps/coherence-pro", "rating_score": 74.0, "rating_count": 419}, {"app_name": "Numerics", "app_slug": "numerics", "app_url": "https://setapp.com/apps/numerics", "rating_score": 74.0, "rating_count": 80}, {"app_name": "Moonitor", "app_slug": "moonitor", "app_url": "https://setapp.com/apps/moonitor", "rating_score": 74.0, "rating_count": 46}, {"app_name": "TeaCode", "app_slug": "teacode", "app_url": "https://setapp.com/apps/teacode", "rating_score": 74.0, "rating_count": 34}, {"app_name": "Compresto", "app_slug": "compresto", "app_url": "https://setapp.com/apps/compresto", "rating_score": 74.0, "rating_count": 31}, {"app_name": "Keep It Shot", "app_slug": "keep-it-shot", "app_url": "https://setapp.com/apps/keep-it-shot", "rating_score": 73.0, "rating_count": 241}, {"app_name": "CleanPresenter", "app_slug": "cleanpresenter", "app_url": "https://setapp.com/apps/cleanpresenter", "rating_score": 73.0, "rating_count": 127}, {"app_name": "Spotless", "app_slug": "spotless", "app_url": "https://setapp.com/apps/spotless", "rating_score": 73.0, "rating_count": 83}, {"app_name": "Manzoni", "app_slug": "manzoni", "app_url": "https://setapp.com/apps/manzoni", "rating_score": 72.0, "rating_count": 18}, {"app_name": "Filmage Editor", "app_slug": "filmage-editor", "app_url": "https://setapp.com/apps/filmage-editor", "rating_score": 71.0, "rating_count": 448}, {"app_name": "Subjects", "app_slug": "subjects", "app_url": "https://setapp.com/apps/subjects", "rating_score": 71.0, "rating_count": 35}, {"app_name": "AdLock", "app_slug": "adlock", "app_url": "https://setapp.com/apps/adlock", "rating_score": 70.0, "rating_count": 758}], "60-69": [{"app_name": "Sidebar", "app_slug": "sidebar", "app_url": "https://setapp.com/apps/sidebar", "rating_score": 69.0, "rating_count": 261}, {"app_name": "Telescopo", "app_slug": "telescopo", "app_url": "https://setapp.com/apps/telescopo", "rating_score": 68.0, "rating_count": 28}, {"app_name": "Tab Finder", "app_slug": "tabfinder", "app_url": "https://setapp.com/apps/tabfinder", "rating_score": 67.0, "rating_count": 160}, {"app_name": "n-Track Studio", "app_slug": "n-track-studio", "app_url": "https://setapp.com/apps/n-track-studio", "rating_score": 67.0, "rating_count": 87}, {"app_name": "Headway", "app_slug": "headway", "app_url": "https://setapp.com/apps/headway", "rating_score": 65.0, "rating_count": 63}, {"app_name": "SwiftyLaunch", "app_slug": "swiftylaunch", "app_url": "https://setapp.com/apps/swiftylaunch", "rating_score": 65.0, "rating_count": 52}, {"app_name": "TaoGit", "app_slug": "taogit", "app_url": "https://setapp.com/apps/taogit", "rating_score": 62.0, "rating_count": 52}, {"app_name": "Quip", "app_slug": "quip", "app_url": "https://setapp.com/apps/quip", "rating_score": 60.0, "rating_count": 35}], "Below 60": [{"app_name": "CleanMy\u00aePhone", "app_slug": "cleanmyphone", "app_url": "https://setapp.com/apps/cleanmyphone", "rating_score": 58.0, "rating_count": 38}, {"app_name": "OrcaSheets", "app_slug": "orcasheets", "app_url": "https://setapp.com/apps/orcasheets", "rating_score": 52.0, "rating_count": 25}]}, "changes_24h": [], "all_apps": [{"app_name": "24 Hour Wallpaper", "app_slug": "24-hour-wallpaper", "app_url": "https://setapp.com/apps/24-hour-wallpaper", "rating_score": 97.0, "rating_count": 1347, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "2Do", "app_slug": "2do", "app_url": "https://setapp.com/apps/2do", "rating_score": 93.0, "rating_count": 387, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "AdLock", "app_slug": "adlock", "app_url": "https://setapp.com/apps/adlock", "rating_score": 70.0, "rating_count": 758, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "AirBuddy", "app_slug": "airbuddy", "app_url": "https://setapp.com/apps/airbuddy", "rating_score": 96.0, "rating_count": 1542, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "AlDente Pro", "app_slug": "aldente-pro", "app_url": "https://setapp.com/apps/aldente-pro", "rating_score": 98.0, "rating_count": 3264, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Almighty", "app_slug": "almighty", "app_url": "https://setapp.com/apps/almighty", "rating_score": 92.0, "rating_count": 266, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Amie", "app_slug": "amie", "app_url": "https://setapp.com/apps/amie", "rating_score": 91.0, "rating_count": 66, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Antinote", "app_slug": "antinote", "app_url": "https://setapp.com/apps/antinote", "rating_score": 98.0, "rating_count": 225, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "AnyDroid", "app_slug": "anytrans-for-android", "app_url": "https://setapp.com/apps/anytrans-for-android", "rating_score": 85.0, "rating_count": 207, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "AnyTrans for iOS", "app_slug": "anytrans", "app_url": "https://setapp.com/apps/anytrans", "rating_score": 76.0, "rating_count": 549, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "App Tamer", "app_slug": "app-tamer", "app_url": "https://setapp.com/apps/app-tamer", "rating_score": 95.0, "rating_count": 663, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "AppWage", "app_slug": "appwage", "app_url": "https://setapp.com/apps/appwage", "rating_score": 82.0, "rating_count": 11, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Archiver", "app_slug": "archiver", "app_url": "https://setapp.com/apps/archiver", "rating_score": 97.0, "rating_count": 1580, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Asset Catalog Creator Pro", "app_slug": "asset-catalog-creator-pro", "app_url": "https://setapp.com/apps/asset-catalog-creator-pro", "rating_score": 95.0, "rating_count": 84, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Awesome Habits", "app_slug": "awesome-habits", "app_url": "https://setapp.com/apps/awesome-habits", "rating_score": 97.0, "rating_count": 287, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Backtrack", "app_slug": "backtrack", "app_url": "https://setapp.com/apps/backtrack", "rating_score": 78.0, "rating_count": 499, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Bartender", "app_slug": "bartender", "app_url": "https://setapp.com/apps/bartender", "rating_score": 98.0, "rating_count": 15306, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Base", "app_slug": "base", "app_url": "https://setapp.com/apps/base", "rating_score": 97.0, "rating_count": 118, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Batteries", "app_slug": "batteries", "app_url": "https://setapp.com/apps/batteries", "rating_score": 87.0, "rating_count": 507, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Be Focused", "app_slug": "be-focused", "app_url": "https://setapp.com/apps/be-focused", "rating_score": 97.0, "rating_count": 387, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "BetterTouchTool", "app_slug": "bettertouchtool", "app_url": "https://setapp.com/apps/bettertouchtool", "rating_score": 98.0, "rating_count": 3237, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "BetterZip", "app_slug": "betterzip", "app_url": "https://setapp.com/apps/betterzip", "rating_score": 96.0, "rating_count": 2493, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Bike", "app_slug": "bike-outliner", "app_url": "https://setapp.com/apps/bike-outliner", "rating_score": 98.0, "rating_count": 190, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "BoltAI", "app_slug": "boltai", "app_url": "https://setapp.com/apps/boltai", "rating_score": 95.0, "rating_count": 461, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Boom", "app_slug": "boom", "app_url": "https://setapp.com/apps/boom", "rating_score": 82.0, "rating_count": 195, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Boom 3D", "app_slug": "boom-3d", "app_url": "https://setapp.com/apps/boom-3d", "rating_score": 91.0, "rating_count": 1742, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Buildwatch", "app_slug": "buildwatch", "app_url": "https://setapp.com/apps/buildwatch", "rating_score": 99.0, "rating_count": 79, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "BusyCal", "app_slug": "busycal", "app_url": "https://setapp.com/apps/busycal", "rating_score": 96.0, "rating_count": 2041, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "BusyContacts", "app_slug": "busycontacts", "app_url": "https://setapp.com/apps/busycontacts", "rating_score": 93.0, "rating_count": 640, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ByDesign", "app_slug": "bydesign", "app_url": "https://setapp.com/apps/bydesign", "rating_score": 85.0, "rating_count": 124, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Calendars", "app_slug": "calendars", "app_url": "https://setapp.com/apps/calendars", "rating_score": 85.0, "rating_count": 355, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CameraBag Pro", "app_slug": "camerabag-pro", "app_url": "https://setapp.com/apps/camerabag-pro", "rating_score": 90.0, "rating_count": 483, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Capto", "app_slug": "capto", "app_url": "https://setapp.com/apps/capto", "rating_score": 86.0, "rating_count": 1026, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ChatMate for WhatsApp", "app_slug": "chatmate-for-whatsapp", "app_url": "https://setapp.com/apps/chatmate-for-whatsapp", "rating_score": 90.0, "rating_count": 649, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Chimeful", "app_slug": "chimeful", "app_url": "https://setapp.com/apps/chimeful", "rating_score": 78.0, "rating_count": 41, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Chronicle", "app_slug": "chronicle", "app_url": "https://setapp.com/apps/chronicle", "rating_score": 91.0, "rating_count": 420, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ChronoSync Express", "app_slug": "chronosync-express", "app_url": "https://setapp.com/apps/chronosync-express", "rating_score": 95.0, "rating_count": 439, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Clariti", "app_slug": "clariti", "app_url": "https://setapp.com/apps/clariti", "rating_score": 93.0, "rating_count": 152, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CleanMyMac", "app_slug": "cleanmymac", "app_url": "https://setapp.com/apps/cleanmymac", "rating_score": 97.0, "rating_count": 17462, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CleanMy\u00aePhone", "app_slug": "cleanmyphone", "app_url": "https://setapp.com/apps/cleanmyphone", "rating_score": 58.0, "rating_count": 38, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CleanPresenter", "app_slug": "cleanpresenter", "app_url": "https://setapp.com/apps/cleanpresenter", "rating_score": 73.0, "rating_count": 127, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CleanShot X", "app_slug": "cleanshot", "app_url": "https://setapp.com/apps/cleanshot", "rating_score": 99.0, "rating_count": 13587, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ClearVPN", "app_slug": "clearvpn", "app_url": "https://setapp.com/apps/clearvpn", "rating_score": 89.0, "rating_count": 3270, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Clobbr", "app_slug": "clobbr", "app_url": "https://setapp.com/apps/clobbr", "rating_score": 86.0, "rating_count": 36, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Cloud Outliner", "app_slug": "cloud-outliner", "app_url": "https://setapp.com/apps/cloud-outliner", "rating_score": 93.0, "rating_count": 88, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CloudMounter", "app_slug": "cloudmounter", "app_url": "https://setapp.com/apps/cloudmounter", "rating_score": 92.0, "rating_count": 1004, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "CodeRunner", "app_slug": "coderunner", "app_url": "https://setapp.com/apps/coderunner", "rating_score": 96.0, "rating_count": 1266, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Coherence X", "app_slug": "coherence-pro", "app_url": "https://setapp.com/apps/coherence-pro", "rating_score": 74.0, "rating_count": 419, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Commander One", "app_slug": "commander-one", "app_url": "https://setapp.com/apps/commander-one", "rating_score": 95.0, "rating_count": 659, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Compresto", "app_slug": "compresto", "app_url": "https://setapp.com/apps/compresto", "rating_score": 74.0, "rating_count": 31, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Core Shell", "app_slug": "core-shell", "app_url": "https://setapp.com/apps/core-shell", "rating_score": 93.0, "rating_count": 556, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Craft", "app_slug": "craft", "app_url": "https://setapp.com/apps/craft", "rating_score": 96.0, "rating_count": 1947, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "DCommander", "app_slug": "dcommander", "app_url": "https://setapp.com/apps/dcommander", "rating_score": 83.0, "rating_count": 155, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Daily", "app_slug": "daily", "app_url": "https://setapp.com/apps/daily", "rating_score": 91.0, "rating_count": 190, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Dash", "app_slug": "dash", "app_url": "https://setapp.com/apps/dash", "rating_score": 99.0, "rating_count": 1187, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Dato", "app_slug": "dato", "app_url": "https://setapp.com/apps/dato", "rating_score": 99.0, "rating_count": 814, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Default Folder X", "app_slug": "default-folder-x", "app_url": "https://setapp.com/apps/default-folder-x", "rating_score": 97.0, "rating_count": 1158, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "DeskMinder\u00b2", "app_slug": "deskminder", "app_url": "https://setapp.com/apps/deskminder", "rating_score": 93.0, "rating_count": 86, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Desktop Composer", "app_slug": "desktop-composer", "app_url": "https://setapp.com/apps/desktop-composer", "rating_score": 92.0, "rating_count": 24, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "DevUtils", "app_slug": "devutils.app", "app_url": "https://setapp.com/apps/devutils.app", "rating_score": 99.0, "rating_count": 1715, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Diagrams", "app_slug": "diagrams", "app_url": "https://setapp.com/apps/diagrams", "rating_score": 91.0, "rating_count": 418, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Diarly", "app_slug": "diarly", "app_url": "https://setapp.com/apps/diarly", "rating_score": 97.0, "rating_count": 376, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "DisplayBuddy", "app_slug": "displaybuddy", "app_url": "https://setapp.com/apps/displaybuddy", "rating_score": 92.0, "rating_count": 1045, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Downie", "app_slug": "downie", "app_url": "https://setapp.com/apps/downie", "rating_score": 98.0, "rating_count": 5223, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Dropshare", "app_slug": "dropshare", "app_url": "https://setapp.com/apps/dropshare", "rating_score": 93.0, "rating_count": 415, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Dropzone", "app_slug": "dropzone", "app_url": "https://setapp.com/apps/dropzone", "rating_score": 99.0, "rating_count": 1152, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Due", "app_slug": "due", "app_url": "https://setapp.com/apps/due", "rating_score": 96.0, "rating_count": 428, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Elephas", "app_slug": "elephas", "app_url": "https://setapp.com/apps/elephas", "rating_score": 86.0, "rating_count": 785, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Elmedia Player", "app_slug": "elmedia-player", "app_url": "https://setapp.com/apps/elmedia-player", "rating_score": 98.0, "rating_count": 1408, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Endurance", "app_slug": "endurance", "app_url": "https://setapp.com/apps/endurance", "rating_score": 94.0, "rating_count": 579, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Eney Beta", "app_slug": "eney", "app_url": "https://setapp.com/apps/eney", "rating_score": 100.0, "rating_count": null, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Eter", "app_slug": "eter", "app_url": "https://setapp.com/apps/eter", "rating_score": 93.0, "rating_count": 158, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Euclid", "app_slug": "euclid", "app_url": "https://setapp.com/apps/euclid", "rating_score": 95.0, "rating_count": 129, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Evenlight", "app_slug": "evenlight", "app_url": "https://setapp.com/apps/evenlight", "rating_score": 94.0, "rating_count": 17, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Expenses", "app_slug": "expenses", "app_url": "https://setapp.com/apps/expenses", "rating_score": 87.0, "rating_count": 132, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Expressions", "app_slug": "expressions", "app_url": "https://setapp.com/apps/expressions", "rating_score": 94.0, "rating_count": 362, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Filmage Editor", "app_slug": "filmage-editor", "app_url": "https://setapp.com/apps/filmage-editor", "rating_score": 71.0, "rating_count": 448, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Flinto", "app_slug": "flinto", "app_url": "https://setapp.com/apps/flinto", "rating_score": 97.0, "rating_count": 58, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "FocuSee", "app_slug": "focusee", "app_url": "https://setapp.com/apps/focusee", "rating_score": 90.0, "rating_count": 144, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Focused", "app_slug": "focused", "app_url": "https://setapp.com/apps/focused", "rating_score": 92.0, "rating_count": 139, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Focused Work", "app_slug": "focused-work-mac", "app_url": "https://setapp.com/apps/focused-work-mac", "rating_score": 88.0, "rating_count": 89, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Folx", "app_slug": "folx", "app_url": "https://setapp.com/apps/folx", "rating_score": 95.0, "rating_count": 1741, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Forecast Bar", "app_slug": "forecast-bar", "app_url": "https://setapp.com/apps/forecast-bar", "rating_score": 95.0, "rating_count": 714, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ForkLift", "app_slug": "forklift", "app_url": "https://setapp.com/apps/forklift", "rating_score": 96.0, "rating_count": 2200, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "FreeYourMusic", "app_slug": "freeyourmusic", "app_url": "https://setapp.com/apps/freeyourmusic", "rating_score": 78.0, "rating_count": 187, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Gemini", "app_slug": "gemini", "app_url": "https://setapp.com/apps/gemini", "rating_score": 93.0, "rating_count": 2175, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Get Backup Pro", "app_slug": "get-backup-pro", "app_url": "https://setapp.com/apps/get-backup-pro", "rating_score": 86.0, "rating_count": 306, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "GetAPI", "app_slug": "getapi", "app_url": "https://setapp.com/apps/getapi", "rating_score": 88.0, "rating_count": 68, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Gifox", "app_slug": "gifox", "app_url": "https://setapp.com/apps/gifox", "rating_score": 98.0, "rating_count": 664, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Gitfox", "app_slug": "gitfox", "app_url": "https://setapp.com/apps/gitfox", "rating_score": 95.0, "rating_count": 669, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "GlueMotion", "app_slug": "gluemotion", "app_url": "https://setapp.com/apps/gluemotion", "rating_score": 93.0, "rating_count": 70, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Glyphs Mini", "app_slug": "glyphs-mini", "app_url": "https://setapp.com/apps/glyphs-mini", "rating_score": 95.0, "rating_count": 127, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Godspeed", "app_slug": "godspeed", "app_url": "https://setapp.com/apps/godspeed", "rating_score": 97.0, "rating_count": 184, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Goldie App", "app_slug": "goldie-app", "app_url": "https://setapp.com/apps/goldie-app", "rating_score": 98.0, "rating_count": 103, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "GoodTask", "app_slug": "goodtask", "app_url": "https://setapp.com/apps/goodtask", "rating_score": 93.0, "rating_count": 382, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "GreenBooks", "app_slug": "greenbooks", "app_url": "https://setapp.com/apps/greenbooks", "rating_score": 84.0, "rating_count": 183, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Hand Mirror", "app_slug": "hand-mirror", "app_url": "https://setapp.com/apps/hand-mirror", "rating_score": 96.0, "rating_count": 661, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "HazeOver", "app_slug": "hazeover", "app_url": "https://setapp.com/apps/hazeover", "rating_score": 99.0, "rating_count": 1147, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Headway", "app_slug": "headway", "app_url": "https://setapp.com/apps/headway", "rating_score": 65.0, "rating_count": 63, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Hookmark", "app_slug": "hookmark", "app_url": "https://setapp.com/apps/hookmark", "rating_score": 96.0, "rating_count": 509, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "HoudahSpot", "app_slug": "houdahspot", "app_url": "https://setapp.com/apps/houdahspot", "rating_score": 98.0, "rating_count": 874, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Hustl", "app_slug": "hustl", "app_url": "https://setapp.com/apps/hustl", "rating_score": 84.0, "rating_count": 101, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Hype", "app_slug": "hype", "app_url": "https://setapp.com/apps/hype", "rating_score": 98.0, "rating_count": 123, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "IconJar", "app_slug": "iconjar", "app_url": "https://setapp.com/apps/iconjar", "rating_score": 98.0, "rating_count": 423, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "In Your Face", "app_slug": "in-your-face", "app_url": "https://setapp.com/apps/in-your-face", "rating_score": 99.0, "rating_count": 742, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Invoice Rex", "app_slug": "invoice-rex", "app_url": "https://setapp.com/apps/invoice-rex", "rating_score": 79.0, "rating_count": 24, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "JoyCast", "app_slug": "joycast", "app_url": "https://setapp.com/apps/joycast", "rating_score": 93.0, "rating_count": 68, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "JoyTap", "app_slug": "joytap", "app_url": "https://setapp.com/apps/joytap", "rating_score": 86.0, "rating_count": 79, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "JustStream", "app_slug": "juststream", "app_url": "https://setapp.com/apps/juststream", "rating_score": 81.0, "rating_count": 227, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Keep It Shot", "app_slug": "keep-it-shot", "app_url": "https://setapp.com/apps/keep-it-shot", "rating_score": 73.0, "rating_count": 241, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "KeyCue", "app_slug": "keycue", "app_url": "https://setapp.com/apps/keycue", "rating_score": 89.0, "rating_count": 142, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "KeyKey Typing Tutor", "app_slug": "keykey-typing-tutor", "app_url": "https://setapp.com/apps/keykey-typing-tutor", "rating_score": 95.0, "rating_count": 482, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Keysmith", "app_slug": "keysmith", "app_url": "https://setapp.com/apps/keysmith", "rating_score": 95.0, "rating_count": 485, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Lacona", "app_slug": "lacona", "app_url": "https://setapp.com/apps/lacona", "rating_score": 75.0, "rating_count": 71, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Lasso", "app_slug": "lasso", "app_url": "https://setapp.com/apps/lasso", "rating_score": 99.0, "rating_count": 117, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Lofi Garden", "app_slug": "lofi-garden", "app_url": "https://setapp.com/apps/lofi-garden", "rating_score": 93.0, "rating_count": 532, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "LookAway", "app_slug": "lookaway", "app_url": "https://setapp.com/apps/lookaway", "rating_score": 98.0, "rating_count": 209, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Luminar Neo", "app_slug": "luminar-neo", "app_url": "https://setapp.com/apps/luminar-neo", "rating_score": 90.0, "rating_count": 832, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Lungo", "app_slug": "lungo", "app_url": "https://setapp.com/apps/lungo", "rating_score": 99.0, "rating_count": 1678, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Magic Window Air", "app_slug": "magic-window-air", "app_url": "https://setapp.com/apps/magic-window-air", "rating_score": 96.0, "rating_count": 491, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Manzoni", "app_slug": "manzoni", "app_url": "https://setapp.com/apps/manzoni", "rating_score": 72.0, "rating_count": 18, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MarginNote", "app_slug": "marginnote", "app_url": "https://setapp.com/apps/marginnote", "rating_score": 92.0, "rating_count": 478, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Marked", "app_slug": "marked", "app_url": "https://setapp.com/apps/marked", "rating_score": 95.0, "rating_count": 616, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MarsEdit", "app_slug": "marsedit", "app_url": "https://setapp.com/apps/marsedit", "rating_score": 93.0, "rating_count": 135, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MenubarX", "app_slug": "menubarx", "app_url": "https://setapp.com/apps/menubarx", "rating_score": 94.0, "rating_count": 262, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Merlin Project Express", "app_slug": "merlin-project-express", "app_url": "https://setapp.com/apps/merlin-project-express", "rating_score": 97.0, "rating_count": 231, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Meta", "app_slug": "meta", "app_url": "https://setapp.com/apps/meta", "rating_score": 96.0, "rating_count": 402, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MetaImage", "app_slug": "metaimage", "app_url": "https://setapp.com/apps/metaimage", "rating_score": 93.0, "rating_count": 231, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Mimir", "app_slug": "mimir", "app_url": "https://setapp.com/apps/mimir", "rating_score": 84.0, "rating_count": 85, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MindNode Classic", "app_slug": "mindnode", "app_url": "https://setapp.com/apps/mindnode", "rating_score": 99.0, "rating_count": 1864, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MindNode Next", "app_slug": "mindnode-next", "app_url": "https://setapp.com/apps/mindnode-next", "rating_score": 94.0, "rating_count": 113, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Mission Control Plus", "app_slug": "mission-control-plus", "app_url": "https://setapp.com/apps/mission-control-plus", "rating_score": 97.0, "rating_count": 1039, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Mockuuups Studio", "app_slug": "mockuuups-studio", "app_url": "https://setapp.com/apps/mockuuups-studio", "rating_score": 94.0, "rating_count": 587, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Moment", "app_slug": "moment", "app_url": "https://setapp.com/apps/moment", "rating_score": 90.0, "rating_count": 225, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MoneyWiz 2026", "app_slug": "moneywiz", "app_url": "https://setapp.com/apps/moneywiz", "rating_score": 81.0, "rating_count": 478, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MonsterWriter", "app_slug": "monsterwriter", "app_url": "https://setapp.com/apps/monsterwriter", "rating_score": 85.0, "rating_count": 92, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Moonitor", "app_slug": "moonitor", "app_url": "https://setapp.com/apps/moonitor", "rating_score": 74.0, "rating_count": 46, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Moonlock", "app_slug": "moonlock", "app_url": "https://setapp.com/apps/moonlock", "rating_score": 91.0, "rating_count": 355, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Mosaic", "app_slug": "mosaic", "app_url": "https://setapp.com/apps/mosaic", "rating_score": 92.0, "rating_count": 2532, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Movie Explorer Pro", "app_slug": "movie-explorer-pro", "app_url": "https://setapp.com/apps/movie-explorer-pro", "rating_score": 93.0, "rating_count": 87, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Movist Pro", "app_slug": "movist-pro", "app_url": "https://setapp.com/apps/movist-pro", "rating_score": 98.0, "rating_count": 970, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "MurmurType", "app_slug": "murmur", "app_url": "https://setapp.com/apps/murmur", "rating_score": 81.0, "rating_count": 364, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Muse", "app_slug": "muse", "app_url": "https://setapp.com/apps/muse", "rating_score": 92.0, "rating_count": 206, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "NetSpot", "app_slug": "netspot", "app_url": "https://setapp.com/apps/netspot", "rating_score": 96.0, "rating_count": 333, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "News Explorer", "app_slug": "news-explorer", "app_url": "https://setapp.com/apps/news-explorer", "rating_score": 96.0, "rating_count": 431, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Nitro PDF Pro", "app_slug": "nitro-pdf-pro", "app_url": "https://setapp.com/apps/nitro-pdf-pro", "rating_score": 89.0, "rating_count": 2958, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Noizio", "app_slug": "noizio", "app_url": "https://setapp.com/apps/noizio", "rating_score": 93.0, "rating_count": 298, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "NotchNook", "app_slug": "notchnook", "app_url": "https://setapp.com/apps/notchnook", "rating_score": 89.0, "rating_count": 1329, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "NotePlan", "app_slug": "noteplan", "app_url": "https://setapp.com/apps/noteplan", "rating_score": 97.0, "rating_count": 1382, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Novabench", "app_slug": "novabench", "app_url": "https://setapp.com/apps/novabench", "rating_score": 95.0, "rating_count": 109, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Numerics", "app_slug": "numerics", "app_url": "https://setapp.com/apps/numerics", "rating_score": 74.0, "rating_count": 80, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Numi", "app_slug": "numi", "app_url": "https://setapp.com/apps/numi", "rating_score": 99.0, "rating_count": 2413, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "One Switch", "app_slug": "one-switch", "app_url": "https://setapp.com/apps/one-switch", "rating_score": 98.0, "rating_count": 1972, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "OpenIn", "app_slug": "openin", "app_url": "https://setapp.com/apps/openin", "rating_score": 97.0, "rating_count": 1077, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "OrcaSheets", "app_slug": "orcasheets", "app_url": "https://setapp.com/apps/orcasheets", "rating_score": 52.0, "rating_count": 25, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PDF Pals", "app_slug": "pdf-pals", "app_url": "https://setapp.com/apps/pdf-pals", "rating_score": 89.0, "rating_count": 370, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PDF Search", "app_slug": "pdf-search", "app_url": "https://setapp.com/apps/pdf-search", "rating_score": 92.0, "rating_count": 364, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PDF Squeezer", "app_slug": "pdf-squeezer", "app_url": "https://setapp.com/apps/pdf-squeezer", "rating_score": 98.0, "rating_count": 1654, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Pagico", "app_slug": "pagico", "app_url": "https://setapp.com/apps/pagico", "rating_score": 92.0, "rating_count": 137, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Paletro", "app_slug": "paletro", "app_url": "https://setapp.com/apps/paletro", "rating_score": 98.0, "rating_count": 449, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Paper", "app_slug": "paper", "app_url": "https://setapp.com/apps/paper", "rating_score": 96.0, "rating_count": 145, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Pareto Security", "app_slug": "pareto-security", "app_url": "https://setapp.com/apps/pareto-security", "rating_score": 97.0, "rating_count": 712, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Paste", "app_slug": "paste", "app_url": "https://setapp.com/apps/paste", "rating_score": 98.0, "rating_count": 6808, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Path Finder", "app_slug": "path-finder", "app_url": "https://setapp.com/apps/path-finder", "rating_score": 92.0, "rating_count": 1528, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Permute", "app_slug": "permute", "app_url": "https://setapp.com/apps/permute", "rating_score": 98.0, "rating_count": 4198, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PhotoBulk", "app_slug": "photobulk", "app_url": "https://setapp.com/apps/photobulk", "rating_score": 97.0, "rating_count": 423, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PhotosRevive", "app_slug": "photosrevive", "app_url": "https://setapp.com/apps/photosrevive", "rating_score": 96.0, "rating_count": 159, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Pie Menu", "app_slug": "pie-menu", "app_url": "https://setapp.com/apps/pie-menu", "rating_score": 81.0, "rating_count": 112, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PixelSnap", "app_slug": "pixelsnap", "app_url": "https://setapp.com/apps/pixelsnap", "rating_score": 99.0, "rating_count": 1444, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PliimPRO", "app_slug": "pliimpro", "app_url": "https://setapp.com/apps/pliimpro", "rating_score": 84.0, "rating_count": 140, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Plus", "app_slug": "plus", "app_url": "https://setapp.com/apps/plus", "rating_score": 86.0, "rating_count": 273, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PocketCAS", "app_slug": "pocketcas", "app_url": "https://setapp.com/apps/pocketcas", "rating_score": 94.0, "rating_count": 49, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PopChar", "app_slug": "popchar", "app_url": "https://setapp.com/apps/popchar", "rating_score": 100.0, "rating_count": 68, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "PopClip", "app_slug": "popclip", "app_url": "https://setapp.com/apps/popclip", "rating_score": 98.0, "rating_count": 1264, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Presentify", "app_slug": "presentify", "app_url": "https://setapp.com/apps/presentify", "rating_score": 95.0, "rating_count": 423, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Prizmo", "app_slug": "prizmo", "app_url": "https://setapp.com/apps/prizmo", "rating_score": 92.0, "rating_count": 420, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Prizmo Remix", "app_slug": "prizmo-remix", "app_url": "https://setapp.com/apps/prizmo-remix", "rating_score": 96.0, "rating_count": 23, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Proxyman", "app_slug": "proxyman", "app_url": "https://setapp.com/apps/proxyman", "rating_score": 99.0, "rating_count": 1034, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Pulltube", "app_slug": "pulltube", "app_url": "https://setapp.com/apps/pulltube", "rating_score": 97.0, "rating_count": 1680, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Quip", "app_slug": "quip", "app_url": "https://setapp.com/apps/quip", "rating_score": 60.0, "rating_count": 35, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "QuitAll", "app_slug": "quit-all-mac", "app_url": "https://setapp.com/apps/quit-all-mac", "rating_score": 98.0, "rating_count": 1765, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Receipts", "app_slug": "receipts", "app_url": "https://setapp.com/apps/receipts", "rating_score": 96.0, "rating_count": 233, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Remote Mouse", "app_slug": "remote-mouse", "app_url": "https://setapp.com/apps/remote-mouse", "rating_score": 79.0, "rating_count": 113, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Renamer", "app_slug": "renamer", "app_url": "https://setapp.com/apps/renamer", "rating_score": 96.0, "rating_count": 1007, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Requestly", "app_slug": "requestly", "app_url": "https://setapp.com/apps/requestly", "rating_score": 81.0, "rating_count": 32, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Riveo", "app_slug": "riveo-mac", "app_url": "https://setapp.com/apps/riveo-mac", "rating_score": 84.0, "rating_count": 31, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Rocket Typist", "app_slug": "rocket-typist", "app_url": "https://setapp.com/apps/rocket-typist", "rating_score": 85.0, "rating_count": 614, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SQLPro Studio", "app_slug": "sqlpro-studio", "app_url": "https://setapp.com/apps/sqlpro-studio", "rating_score": 97.0, "rating_count": 632, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SQLPro for SQLite", "app_slug": "sqlpro-for-sqlite", "app_url": "https://setapp.com/apps/sqlpro-for-sqlite", "rating_score": 96.0, "rating_count": 112, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SSH Config Editor", "app_slug": "ssh-config-editor", "app_url": "https://setapp.com/apps/ssh-config-editor", "rating_score": 96.0, "rating_count": 338, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ScreenFloat", "app_slug": "screenfloat", "app_url": "https://setapp.com/apps/screenfloat", "rating_score": 95.0, "rating_count": 74, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Secrets 4", "app_slug": "secrets", "app_url": "https://setapp.com/apps/secrets", "rating_score": 80.0, "rating_count": 186, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Session", "app_slug": "session", "app_url": "https://setapp.com/apps/session", "rating_score": 98.0, "rating_count": 2059, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SheetPlanner", "app_slug": "sheetplanner", "app_url": "https://setapp.com/apps/sheetplanner", "rating_score": 85.0, "rating_count": 112, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Shortcutie", "app_slug": "shortcutie", "app_url": "https://setapp.com/apps/shortcutie", "rating_score": 100.0, "rating_count": 11, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SideNotes", "app_slug": "sidenotes", "app_url": "https://setapp.com/apps/sidenotes", "rating_score": 97.0, "rating_count": 1419, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Sidebar", "app_slug": "sidebar", "app_url": "https://setapp.com/apps/sidebar", "rating_score": 69.0, "rating_count": 261, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Silenz", "app_slug": "silenz", "app_url": "https://setapp.com/apps/silenz", "rating_score": 82.0, "rating_count": 57, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Simon", "app_slug": "simon", "app_url": "https://setapp.com/apps/simon", "rating_score": 78.0, "rating_count": 50, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Sip", "app_slug": "sip", "app_url": "https://setapp.com/apps/sip", "rating_score": 93.0, "rating_count": 1588, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Slidepad", "app_slug": "slidepad", "app_url": "https://setapp.com/apps/slidepad", "rating_score": 92.0, "rating_count": 512, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SlouchSniper", "app_slug": "slouchsniper", "app_url": "https://setapp.com/apps/slouchsniper", "rating_score": 89.0, "rating_count": 35, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Smmall Cloud", "app_slug": "smmall-cloud", "app_url": "https://setapp.com/apps/smmall-cloud", "rating_score": 84.0, "rating_count": 118, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SnapMotion", "app_slug": "snapmotion", "app_url": "https://setapp.com/apps/snapmotion", "rating_score": 99.0, "rating_count": 200, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SnippetsLab", "app_slug": "snippetslab", "app_url": "https://setapp.com/apps/snippetslab", "rating_score": 99.0, "rating_count": 756, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Soulver", "app_slug": "soulver", "app_url": "https://setapp.com/apps/soulver", "rating_score": 99.0, "rating_count": 973, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Spark Mail", "app_slug": "spark-mail", "app_url": "https://setapp.com/apps/spark-mail", "rating_score": 89.0, "rating_count": 2822, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Speeko", "app_slug": "speeko", "app_url": "https://setapp.com/apps/speeko", "rating_score": 82.0, "rating_count": 117, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Spellar AI", "app_slug": "spellar-ai", "app_url": "https://setapp.com/apps/spellar-ai", "rating_score": 79.0, "rating_count": 373, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Spotless", "app_slug": "spotless", "app_url": "https://setapp.com/apps/spotless", "rating_score": 73.0, "rating_count": 83, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Squash", "app_slug": "squash", "app_url": "https://setapp.com/apps/squash", "rating_score": 92.0, "rating_count": 899, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Step Two", "app_slug": "step-two", "app_url": "https://setapp.com/apps/step-two", "rating_score": 97.0, "rating_count": 457, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Strongbox", "app_slug": "strongbox", "app_url": "https://setapp.com/apps/strongbox", "rating_score": 96.0, "rating_count": 46, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Studies", "app_slug": "studies", "app_url": "https://setapp.com/apps/studies", "rating_score": 96.0, "rating_count": 85, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Subjects", "app_slug": "subjects", "app_url": "https://setapp.com/apps/subjects", "rating_score": 71.0, "rating_count": 35, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Substage", "app_slug": "substage", "app_url": "https://setapp.com/apps/substage", "rating_score": 86.0, "rating_count": 83, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Supercharge", "app_slug": "supercharge", "app_url": "https://setapp.com/apps/supercharge", "rating_score": 100.0, "rating_count": 679, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Swift Publisher", "app_slug": "swift-publisher", "app_url": "https://setapp.com/apps/swift-publisher", "rating_score": 93.0, "rating_count": 183, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "SwiftyLaunch", "app_slug": "swiftylaunch", "app_url": "https://setapp.com/apps/swiftylaunch", "rating_score": 65.0, "rating_count": 52, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Swish", "app_slug": "swish", "app_url": "https://setapp.com/apps/swish", "rating_score": 97.0, "rating_count": 1009, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Tab Finder", "app_slug": "tabfinder", "app_url": "https://setapp.com/apps/tabfinder", "rating_score": 67.0, "rating_count": 160, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TablePlus", "app_slug": "tableplus", "app_url": "https://setapp.com/apps/tableplus", "rating_score": 99.0, "rating_count": 2409, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TaoGit", "app_slug": "taogit", "app_url": "https://setapp.com/apps/taogit", "rating_score": 62.0, "rating_count": 52, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TaskPaper", "app_slug": "taskpaper", "app_url": "https://setapp.com/apps/taskpaper", "rating_score": 98.0, "rating_count": 298, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Taskheat", "app_slug": "taskheat", "app_url": "https://setapp.com/apps/taskheat", "rating_score": 77.0, "rating_count": 310, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TeaCode", "app_slug": "teacode", "app_url": "https://setapp.com/apps/teacode", "rating_score": 74.0, "rating_count": 34, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Teleprompter App", "app_slug": "teleprompter-app", "app_url": "https://setapp.com/apps/teleprompter-app", "rating_score": 90.0, "rating_count": 141, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Telescopo", "app_slug": "telescopo", "app_url": "https://setapp.com/apps/telescopo", "rating_score": 68.0, "rating_count": 28, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TextSniper", "app_slug": "textsniper", "app_url": "https://setapp.com/apps/textsniper", "rating_score": 99.0, "rating_count": 3441, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TextSoap", "app_slug": "textsoap", "app_url": "https://setapp.com/apps/textsoap", "rating_score": 99.0, "rating_count": 650, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Time Out", "app_slug": "time-out", "app_url": "https://setapp.com/apps/time-out", "rating_score": 95.0, "rating_count": 177, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Timemator", "app_slug": "timemator", "app_url": "https://setapp.com/apps/timemator", "rating_score": 95.0, "rating_count": 683, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Timing", "app_slug": "timing", "app_url": "https://setapp.com/apps/timing", "rating_score": 98.0, "rating_count": 2060, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Tiny Shield", "app_slug": "tiny-shield", "app_url": "https://setapp.com/apps/tiny-shield", "rating_score": 89.0, "rating_count": 89, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "ToothFairy", "app_slug": "toothfairy", "app_url": "https://setapp.com/apps/toothfairy", "rating_score": 94.0, "rating_count": 412, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TouchRetouch", "app_slug": "touchretouch", "app_url": "https://setapp.com/apps/touchretouch", "rating_score": 98.0, "rating_count": 743, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TranscribeX", "app_slug": "transcribex", "app_url": "https://setapp.com/apps/transcribex", "rating_score": 91.0, "rating_count": 66, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Transcrybe", "app_slug": "transcrybe", "app_url": "https://setapp.com/apps/transcrybe", "rating_score": 87.0, "rating_count": 23, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Transloader", "app_slug": "transloader", "app_url": "https://setapp.com/apps/transloader", "rating_score": 97.0, "rating_count": 91, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Trickster", "app_slug": "trickster", "app_url": "https://setapp.com/apps/trickster", "rating_score": 95.0, "rating_count": 176, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TripMode", "app_slug": "tripmode", "app_url": "https://setapp.com/apps/tripmode", "rating_score": 97.0, "rating_count": 751, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Tripsy", "app_slug": "tripsy", "app_url": "https://setapp.com/apps/tripsy", "rating_score": 91.0, "rating_count": 421, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Typedesk", "app_slug": "typedesk-mac", "app_url": "https://setapp.com/apps/typedesk-mac", "rating_score": 80.0, "rating_count": 5, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Typeface", "app_slug": "typeface", "app_url": "https://setapp.com/apps/typeface", "rating_score": 98.0, "rating_count": 779, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "TypingMind", "app_slug": "typingmind", "app_url": "https://setapp.com/apps/typingmind", "rating_score": 90.0, "rating_count": 1349, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Ulysses", "app_slug": "ulysses", "app_url": "https://setapp.com/apps/ulysses", "rating_score": 98.0, "rating_count": 2306, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Unclutter", "app_slug": "unclutter", "app_url": "https://setapp.com/apps/unclutter", "rating_score": 98.0, "rating_count": 630, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Unite Pro", "app_slug": "unite", "app_url": "https://setapp.com/apps/unite", "rating_score": 100.0, "rating_count": null, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "UpLife", "app_slug": "uplife-mental-health-therapy-ios", "app_url": "https://setapp.com/apps/uplife-mental-health-therapy-ios", "rating_score": 75.0, "rating_count": 8, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Usage", "app_slug": "usage", "app_url": "https://setapp.com/apps/usage", "rating_score": 97.0, "rating_count": 210, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "VidCap", "app_slug": "vidcap", "app_url": "https://setapp.com/apps/vidcap", "rating_score": 92.0, "rating_count": 440, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Vivid", "app_slug": "vivid", "app_url": "https://setapp.com/apps/vivid", "rating_score": 85.0, "rating_count": 427, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "WallCal", "app_slug": "wallcal", "app_url": "https://setapp.com/apps/wallcal", "rating_score": 89.0, "rating_count": 204, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Whisk", "app_slug": "whisk", "app_url": "https://setapp.com/apps/whisk", "rating_score": 95.0, "rating_count": 202, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "WhisperTranscribe", "app_slug": "whisper-transcribe", "app_url": "https://setapp.com/apps/whisper-transcribe", "rating_score": 80.0, "rating_count": 297, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "WiFi Explorer", "app_slug": "wifi-explorer", "app_url": "https://setapp.com/apps/wifi-explorer", "rating_score": 97.0, "rating_count": 627, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "WiFi Signal", "app_slug": "wifi-signal", "app_url": "https://setapp.com/apps/wifi-signal", "rating_score": 93.0, "rating_count": 389, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "WidgetWall", "app_slug": "widget-wall", "app_url": "https://setapp.com/apps/widget-wall", "rating_score": 89.0, "rating_count": 523, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Workspaces", "app_slug": "workspaces", "app_url": "https://setapp.com/apps/workspaces", "rating_score": 94.0, "rating_count": 351, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "World Clock Pro", "app_slug": "world-clock-pro", "app_url": "https://setapp.com/apps/world-clock-pro", "rating_score": 89.0, "rating_count": 426, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Xnapper", "app_slug": "xnapper", "app_url": "https://setapp.com/apps/xnapper", "rating_score": 96.0, "rating_count": 851, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "Yoink", "app_slug": "yoink", "app_url": "https://setapp.com/apps/yoink", "rating_score": 99.0, "rating_count": 1871, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iBoysoft Data Recovery", "app_slug": "iboysoft-data-recovery", "app_url": "https://setapp.com/apps/iboysoft-data-recovery", "rating_score": 87.0, "rating_count": 55, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iBoysoft MagicMenu", "app_slug": "iboysoft-magicmenu", "app_url": "https://setapp.com/apps/iboysoft-magicmenu", "rating_score": 88.0, "rating_count": 414, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iBoysoft NTFS for Mac", "app_slug": "iboysoft-ntfs-for-mac", "app_url": "https://setapp.com/apps/iboysoft-ntfs-for-mac", "rating_score": 87.0, "rating_count": 734, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iFlicks", "app_slug": "iflicks", "app_url": "https://setapp.com/apps/iflicks", "rating_score": 94.0, "rating_count": 156, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iMeetingX", "app_slug": "imeetingx", "app_url": "https://setapp.com/apps/imeetingx", "rating_score": 85.0, "rating_count": 47, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iShowU", "app_slug": "ishowu", "app_url": "https://setapp.com/apps/ishowu", "rating_score": 76.0, "rating_count": 111, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "iStat Menus", "app_slug": "istat-menus", "app_url": "https://setapp.com/apps/istat-menus", "rating_score": 97.0, "rating_count": 5326, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "n-Track Studio", "app_slug": "n-track-studio", "app_url": "https://setapp.com/apps/n-track-studio", "rating_score": 67.0, "rating_count": 87, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}, {"app_name": "start", "app_slug": "start", "app_url": "https://setapp.com/apps/start", "rating_score": 95.0, "rating_count": 184, "rating_7d_ago": null, "change_7d": null, "direction_7d": null}], "at_risk": [{"app_name": "OrcaSheets", "app_slug": "orcasheets", "app_url": "https://setapp.com/apps/orcasheets", "rating_score": 52.0, "rating_count": 25, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "CleanMy\u00aePhone", "app_slug": "cleanmyphone", "app_url": "https://setapp.com/apps/cleanmyphone", "rating_score": 58.0, "rating_count": 38, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "Quip", "app_slug": "quip", "app_url": "https://setapp.com/apps/quip", "rating_score": 60.0, "rating_count": 35, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "TaoGit", "app_slug": "taogit", "app_url": "https://setapp.com/apps/taogit", "rating_score": 62.0, "rating_count": 52, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "Headway", "app_slug": "headway", "app_url": "https://setapp.com/apps/headway", "rating_score": 65.0, "rating_count": 63, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "SwiftyLaunch", "app_slug": "swiftylaunch", "app_url": "https://setapp.com/apps/swiftylaunch", "rating_score": 65.0, "rating_count": 52, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "Tab Finder", "app_slug": "tabfinder", "app_url": "https://setapp.com/apps/tabfinder", "rating_score": 67.0, "rating_count": 160, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "n-Track Studio", "app_slug": "n-track-studio", "app_url": "https://setapp.com/apps/n-track-studio", "rating_score": 67.0, "rating_count": 87, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "Telescopo", "app_slug": "telescopo", "app_url": "https://setapp.com/apps/telescopo", "rating_score": 68.0, "rating_count": 28, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}, {"app_name": "Sidebar", "app_slug": "sidebar", "app_url": "https://setapp.com/apps/sidebar", "rating_score": 69.0, "rating_count": 261, "rating_7d_ago": null, "change_7d": null, "direction_7d": null, "risk_reasons": ["Rating below 70%"]}], "stable": [], "history": {"orcasheets": [{"date": "2026-03-13", "rating": 52.0}], "cleanmyphone": [{"date": "2026-03-13", "rating": 58.0}], "quip": [{"date": "2026-03-13", "rating": 60.0}], "taogit": [{"date": "2026-03-13", "rating": 62.0}], "headway": [{"date": "2026-03-13", "rating": 65.0}], "swiftylaunch": [{"date": "2026-03-13", "rating": 65.0}], "tabfinder": [{"date": "2026-03-13", "rating": 67.0}], "n-track-studio": [{"date": "2026-03-13", "rating": 67.0}], "telescopo": [{"date": "2026-03-13", "rating": 68.0}], "sidebar": [{"date": "2026-03-13", "rating": 69.0}]}};</script>
+<script>
+/* ═══════════════════════════════════════════════════
+   DATA LOADING — supports both embedded and fetch()
+   ═══════════════════════════════════════════════════ */
+let DATA = null;
+
+(async function init() {
+  // Try loading via fetch (GitHub Pages mode)
+  if (typeof EMBEDDED_DATA !== 'undefined') {
+    DATA = EMBEDDED_DATA;
+    render();
+    return;
+  }
+  try {
+    const resp = await fetch('dashboard_data.json');
+    if (resp.ok) { DATA = await resp.json(); render(); return; }
+  } catch(e) {}
+  // Fallback: try relative path from reports/
+  try {
+    const resp2 = await fetch('../reports/dashboard_data.json');
+    if (resp2.ok) { DATA = await resp2.json(); render(); return; }
+  } catch(e2) {}
+
+  document.getElementById('loadingState').innerHTML =
+    '<div style="color:var(--danger)">Could not load dashboard data.<br>Place <code>dashboard_data.json</code> alongside this HTML file.</div>';
+})();
+
+/* ═══════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════ */
+function render() {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashboardContent').style.display = 'block';
+
+  renderKPIs();
+  renderTabs();
+  renderOverviewTab();
+  renderChangesTab();
+  renderAtRiskTab();
+  renderStableTab();
+}
+
+/* ── Helpers ──────────────────────────── */
+function ratingColor(r) {
+  if (r < 60) return 'var(--danger)';
+  if (r < 70) return 'var(--warning)';
+  if (r < 80) return 'var(--accent)';
+  return 'var(--success)';
+}
+function ratingBg(r) {
+  if (r < 60) return 'var(--danger-bg)';
+  if (r < 70) return 'var(--warning-bg)';
+  return 'var(--accent-pale)';
+}
+function fmtCount(n) { return n != null ? n.toLocaleString() : '—'; }
+function changeHTML(val, dir) {
+  if (val == null) return '<span class="change-stable">—</span>';
+  const cls = dir === 'up' ? 'change-up arrow-up' : dir === 'down' ? 'change-down arrow-down' : 'change-stable';
+  const sign = val > 0 ? '+' : '';
+  return `<span class="change-cell ${cls}">${sign}${val}</span>`;
+}
+
+/* ── KPIs ─────────────────────────────── */
+function renderKPIs() {
+  document.getElementById('snapshotDate').textContent = DATA.snapshot_date;
+  document.getElementById('snapshotCount').textContent = DATA.snapshot_count + ' snapshot(s)';
+  document.getElementById('kpiTotal').textContent = DATA.total_apps;
+  if (DATA.total_discovered && DATA.total_discovered > DATA.total_apps) {
+    document.getElementById('kpiTotalSub').textContent = DATA.total_apps + ' of ' + DATA.total_discovered + ' rated';
+  }
+  document.getElementById('kpiAvg').textContent = DATA.avg_rating + '%';
+  document.getElementById('kpiMin').textContent = DATA.min_rating + '%';
+  document.getElementById('kpiMinApp').textContent = DATA.bottom10.length ? DATA.bottom10[0].app_name : '—';
+  document.getElementById('footerDate').textContent = DATA.generated_at;
+
+  let below70 = 0;
+  (DATA.distribution || []).forEach(d => {
+    if (['60-69','Below 60'].includes(d.bucket)) below70 += d.count;
+  });
+  document.getElementById('kpiBelow70').textContent = below70;
+}
+
+/* ── Tabs ─────────────────────────────── */
+function renderTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+/* ═══════════ Overview Tab ═══════════ */
+function renderOverviewTab() {
+  // Bottom 10 table
+  const tbody = document.getElementById('bottom10Body');
+  DATA.bottom10.forEach((app, i) => {
+    const color = ratingColor(app.rating_score);
+    let signal = '';
+    if (app.rating_score < 60) signal = '<span class="pill pill-danger">Critical</span>';
+    else if (app.rating_score < 70) signal = '<span class="pill pill-warning">Low</span>';
+    else signal = '<span class="pill pill-ok">Watch</span>';
+    tbody.innerHTML += `<tr>
+      <td class="rank-cell">${i+1}</td>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-cell"><div class="rating-bar-wrap">
+        <div class="rating-bar"><div class="rating-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="rating-num" style="color:${color}">${app.rating_score}%</span>
+      </div></td>
+      <td class="count-cell">${fmtCount(app.rating_count)}</td>
+      <td>${signal}</td>
+    </tr>`;
+  });
+
+  // Bar chart
+  new Chart(document.getElementById('barChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: DATA.bottom10.map(a => a.app_name),
+      datasets: [{
+        data: DATA.bottom10.map(a => a.rating_score),
+        backgroundColor: DATA.bottom10.map(a => {
+          if (a.rating_score < 60) return 'rgba(232,23,74,0.65)';
+          if (a.rating_score < 70) return 'rgba(217,123,0,0.55)';
+          return 'rgba(255,0,170,0.4)';
+        }),
+        borderRadius: 6, barPercentage: 0.7,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => c.raw + '%' } }
+      },
+      scales: {
+        x: { min: 0, max: 100, grid: { color: '#f0f0f0' }, ticks: { color: '#999', callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: '#222', font: { size: 12, weight: '500' } } }
+      }
+    }
+  });
+
+  // Donut chart
+  const bucketColors = {
+    '95-100': '#1A8A4A', '90-94': '#3BAA6A', '80-89': '#FF00AA',
+    '70-79': '#D97B00', '60-69': '#E8594A', 'Below 60': '#E8174A',
+  };
+  const donutChart = new Chart(document.getElementById('donutChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: DATA.distribution.map(d => d.bucket + '% (' + d.count + ' apps)'),
+      datasets: [{
+        data: DATA.distribution.map(d => d.count),
+        backgroundColor: DATA.distribution.map(d => bucketColors[d.bucket] || '#ccc'),
+        borderWidth: 2, borderColor: '#fff', hoverOffset: 10,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: '#333', padding: 12, font: { size: 12 }, usePointStyle: true, pointStyleWidth: 10 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${DATA.distribution[ctx.dataIndex].bucket}%: ${ctx.raw} apps — click to view`
+          }
+        }
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        openDistPanel(DATA.distribution[elements[0].index].bucket);
+      }
+    }
+  });
+
+  // Drill-down panel
+  document.getElementById('distPanelClose').addEventListener('click', () => {
+    document.getElementById('distPanel').classList.remove('open');
+  });
+
+  // AI Analysis cards
+  const analysisDiv = document.getElementById('analysisCards');
+  DATA.bottom10.forEach(app => {
+    let tags = '', explanation = '';
+    if (app.rating_count != null && app.rating_count < 50) {
+      tags += '<span class="tag" style="background:var(--warning-bg);color:var(--warning)">Low sample</span>';
+      explanation += `With only ${app.rating_count} ratings, a few negative reviews can significantly skew the score. `;
+    }
+    if (app.rating_count != null && app.rating_count > 100) {
+      tags += '<span class="tag" style="background:var(--accent-15);color:var(--accent)">Significant data</span>';
+      explanation += `${app.rating_count.toLocaleString()} ratings make this a statistically reliable signal. `;
+    }
+    if (app.rating_score < 60) {
+      tags += '<span class="tag" style="background:var(--danger-bg);color:var(--danger)">Critical</span>';
+      explanation += 'A sub-60% rating points to major issues — likely broken features, serious bugs, or deeply misaligned expectations. ';
+    } else if (app.rating_score < 70) {
+      explanation += 'Ratings in the 60s suggest friction — often UX problems, missing features, or performance issues. ';
+    } else {
+      explanation += 'Below-average rating warrants monitoring for further decline. ';
+    }
+    const badgeColor = ratingColor(app.rating_score);
+    analysisDiv.innerHTML += `<div class="analysis-card">
+      <div class="card-top">
+        <h4><a href="${app.app_url}" target="_blank">${app.app_name}</a></h4>
+        <span class="rating-badge" style="color:${badgeColor};background:${ratingBg(app.rating_score)}">${app.rating_score}%</span>
+      </div>
+      <div style="margin-bottom:8px">${tags}</div>
+      <p>${explanation}</p>
+    </div>`;
+  });
+}
+
+function openDistPanel(bucket) {
+  const apps = (DATA.apps_by_bucket && DATA.apps_by_bucket[bucket]) || [];
+  document.getElementById('distPanelTitle').textContent = bucket + '% — ' + apps.length + ' app' + (apps.length !== 1 ? 's' : '');
+  const list = document.getElementById('distPanelList');
+  list.innerHTML = '';
+  if (!apps.length) {
+    list.innerHTML = '<li style="color:var(--text-muted);font-size:13px">No apps in this range</li>';
+  } else {
+    apps.forEach(app => {
+      const color = ratingColor(app.rating_score);
+      list.innerHTML += `<li>
+        <a class="app-link" href="${app.app_url}" target="_blank">${app.app_name}</a>
+        <div class="dist-app-bar"><div class="dist-app-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="dist-app-rating" style="color:${color}">${app.rating_score}%</span>
+        <span class="dist-app-count">${app.rating_count != null ? app.rating_count.toLocaleString() + ' ratings' : ''}</span>
+      </li>`;
+    });
+  }
+  document.getElementById('distPanel').classList.add('open');
+}
+
+/* ═══════════ 24h Changes Tab ═══════════ */
+function renderChangesTab() {
+  const changes = DATA.changes_24h || [];
+  document.getElementById('changesCount').textContent = changes.length + ' changed';
+
+  if (!changes.length) {
+    document.getElementById('changesEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('changesTable').style.display = 'block';
+  const tbody = document.getElementById('changesBody');
+  changes.forEach(app => {
+    const dirClass = app.direction === 'up' ? 'change-up arrow-up' : 'change-down arrow-down';
+    const sign = app.change > 0 ? '+' : '';
+    tbody.innerHTML += `<tr>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-num" style="color:var(--text-muted)">${app.previous_rating}%</td>
+      <td class="rating-num" style="color:${ratingColor(app.current_rating)}">${app.current_rating}%</td>
+      <td class="change-cell ${dirClass}">${sign}${app.change}</td>
+      <td>${app.direction === 'up'
+        ? '<span class="pill pill-ok">Improved</span>'
+        : '<span class="pill pill-danger">Declined</span>'}</td>
+    </tr>`;
+  });
+}
+
+/* ═══════════ All Apps Tab ═══════════ */
+/* ═══════════ At Risk Tab ═══════════ */
+function renderAtRiskTab() {
+  const apps = DATA.at_risk || [];
+  document.getElementById('atRiskCount').textContent = apps.length + ' flagged';
+
+  if (!apps.length) {
+    document.getElementById('atRiskEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('atRiskTable').style.display = 'block';
+  const tbody = document.getElementById('atRiskBody');
+  apps.forEach(app => {
+    const color = ratingColor(app.rating_score);
+    const weekChange = changeHTML(app.change_7d, app.direction_7d);
+    const reasons = (app.risk_reasons || []).map(r => `<span class="tag" style="background:var(--danger-bg);color:var(--danger)">${r}</span>`).join('');
+    tbody.innerHTML += `<tr>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-cell"><div class="rating-bar-wrap">
+        <div class="rating-bar"><div class="rating-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="rating-num" style="color:${color}">${app.rating_score}%</span>
+      </div></td>
+      <td>${weekChange}</td>
+      <td>${reasons}</td>
+    </tr>`;
+  });
+}
+
+/* ═══════════ Stable Tab ═══════════ */
+function renderStableTab() {
+  const apps = DATA.stable || [];
+  document.getElementById('stableCount').textContent = apps.length + ' apps';
+
+  const tbody = document.getElementById('stableBody');
+  apps.forEach(app => {
+    const color = ratingColor(app.rating_score);
+    const weekChange = changeHTML(app.change_7d, app.direction_7d);
+    tbody.innerHTML += `<tr>
+      <td class="app-cell"><a href="${app.app_url}" target="_blank">${app.app_name}</a></td>
+      <td class="rating-cell"><div class="rating-bar-wrap">
+        <div class="rating-bar"><div class="rating-bar-fill" style="width:${app.rating_score}%;background:${color}"></div></div>
+        <span class="rating-num" style="color:${color}">${app.rating_score}%</span>
+      </div></td>
+      <td class="count-cell">${fmtCount(app.rating_count)}</td>
+      <td>${weekChange}</td>
+    </tr>`;
+  });
+}
+</script>
+</body>
+</html>
